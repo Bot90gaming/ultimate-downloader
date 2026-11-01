@@ -1,0 +1,104 @@
+name: CI Test & Build Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix-build-test:
+    name: Test & Build (${{ matrix.os }} - Node ${{ matrix.node-version }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [22.x]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Setup FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        id: setup-ffmpeg
+        continue-on-error: true
+
+      - name: Fallback FFmpeg installation (Ubuntu)
+        if: runner.os == 'Linux' && steps.setup-ffmpeg.outcome != 'success'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Fallback FFmpeg installation (macOS)
+        if: runner.os == 'macOS' && steps.setup-ffmpeg.outcome != 'success'
+        run: |
+          brew install ffmpeg
+
+      - name: Fallback FFmpeg installation (Windows)
+        if: runner.os == 'Windows' && steps.setup-ffmpeg.outcome != 'success'
+        run: |
+          choco install ffmpeg -y
+
+      - name: Verify FFmpeg Installation
+        run: ffmpeg -version
+
+      - name: Install Project Dependencies
+        run: npm install
+
+      - name: Verify Server Build
+        run: npm --prefix server run build
+
+      - name: Verify Client Build
+        run: npm --prefix client run build
+
+      - name: Run Workspace Tests
+        run: npm test
+
+  lint-and-typecheck:
+    name: Code Quality & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Typecheck Shared Models
+        run: npx tsc shared/types.ts --noEmit
+
+      - name: Typecheck Server
+        run: npx --prefix server tsc --noEmit
+
+      - name: Typecheck Client
+        run: npx --prefix client tsc --noEmit

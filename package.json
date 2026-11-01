@@ -1,0 +1,52 @@
+{
+  "name": "ultimate-downloader",
+  "version": "1.0.0",
+  "description": "The Ultimate Cross-Platform Video and Image Downloader & Bulk Media Extractor",
+  "private": true,
+  "main": "server/src/index.ts",
+  "bin": {
+    "ultimate-dl": "./server/bin/cli.js"
+  },
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"cyan.bold,green.bold\" \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "start": "npm --prefix server run start",
+    "test": "node tests/run-tests.js",
+    "test:all": "npm --prefix server test && npm --prefix client test && node tests/run-tests.js",
+    "cli": "node server/bin/cli.js",
+    "electron:start": "npm --prefix electron start",
+    "electron:dev": "npm --prefix electron run dev",
+    "electron:dist:linux": "npm --prefix electron run dist:linux",
+    "electron:dist:win": "npm --prefix electron run dist:win",
+    "electron:dist:mac": "npm --prefix electron run dist:mac",
+    "docker:build": "docker build -f docker/Dockerfile -t ultimate-downloader .",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down"
+  },
+  "keywords": [
+    "video-downloader",
+    "image-downloader",
+    "media-extractor",
+    "youtube",
+    "tiktok",
+    "instagram",
+    "twitter",
+    "cross-platform",
+    "tailwind-css",
+    "react",
+    "ffmpeg",
+    "fastapi",
+    "nodejs"
+  ],
+  "author": "Hoshirun",
+  "license": "MIT",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
