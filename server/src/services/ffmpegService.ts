@@ -311,12 +311,18 @@ export class FfmpegService {
           break;
       }
     } else {
-      // Video output: if trimming is applied, re-encode audio & video for sample-accurate cuts
-      if (trimStart || trimEnd) {
-        args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-b:a', '192k');
-      } else {
-        args.push('-c', 'copy');
-      }
+      // Universal Video Output: H.264 (AVC) + AAC + faststart + yuv420p for 100% universal multi-device playback (iOS, Android, Windows, Mac)
+      args.push(
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '21',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-movflags', '+faststart'
+      );
     }
 
     args.push(outputPath);

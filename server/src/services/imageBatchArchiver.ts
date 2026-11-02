@@ -31,12 +31,60 @@ export class ImageBatchArchiver {
       throw new Error(`Invalid URL provided: ${targetUrl}`);
     }
 
+    // 1. Direct image check by extension or query params
+    const cleanUrlLower = targetUrl.toLowerCase();
+    const hasImageExt =
+      /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg)($|\?)/i.test(targetUrl) ||
+      cleanUrlLower.includes('format=jpg') ||
+      cleanUrlLower.includes('format=png') ||
+      cleanUrlLower.includes('format=webp');
+
+    if (hasImageExt) {
+      const ext = this.extractExtension(targetUrl);
+      const filename = path.basename(new URL(targetUrl).pathname) || 'image';
+      return {
+        url: targetUrl,
+        title: filename,
+        images: [
+          {
+            id: 'img-1',
+            url: targetUrl,
+            thumbnailUrl: targetUrl,
+            extension: ext,
+            alt: 'Direct Image Asset',
+          },
+        ],
+        count: 1,
+      };
+    }
+
     const response = await axios.get<string>(targetUrl, {
       headers: this.defaultHeaders,
       timeout: 20000,
       maxRedirects: 5,
       responseType: 'text',
+      validateStatus: () => true,
     });
+
+    const contentType = String(response.headers['content-type'] || '').toLowerCase();
+    if (contentType.startsWith('image/')) {
+      const ext = contentType.split('/')[1]?.split(';')[0]?.trim() || this.extractExtension(targetUrl);
+      const filename = path.basename(new URL(targetUrl).pathname) || 'image';
+      return {
+        url: targetUrl,
+        title: filename,
+        images: [
+          {
+            id: 'img-1',
+            url: targetUrl,
+            thumbnailUrl: targetUrl,
+            extension: ext,
+            alt: 'Direct Image Asset',
+          },
+        ],
+        count: 1,
+      };
+    }
 
     const html = response.data;
     const $ = cheerio.load(html);

@@ -187,12 +187,12 @@ router.get('/files/:taskId', (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/extract-images
+ * POST /api/extract-images & /api/images/extract
  * Extracts all full-resolution images from a webpage or gallery URL.
  */
-router.post('/extract-images', async (req: Request, res: Response, next: NextFunction) => {
+const handleExtractImages = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { url } = req.body;
+    const url = req.body?.url || req.query?.url;
     if (!url || typeof url !== 'string' || !url.trim()) {
       res.status(400).json({ error: 'Valid URL is required.' });
       return;
@@ -204,6 +204,45 @@ router.post('/extract-images', async (req: Request, res: Response, next: NextFun
     res.status(422).json({
       error: err.message || 'Failed to extract images from target webpage.',
     });
+  }
+};
+
+router.post('/extract-images', handleExtractImages);
+router.post('/images/extract', handleExtractImages);
+router.get('/images/extract', handleExtractImages);
+
+/**
+ * GET /api/download-image
+ * Proxies and streams any image URL as an attachment so browser saves real file without CORS blocking.
+ */
+router.get('/download-image', async (req: Request, res: Response) => {
+  const imageUrl = req.query.url as string;
+  const filename = (req.query.filename as string) || 'image.jpg';
+
+  if (!imageUrl) {
+    res.status(400).json({ error: 'Missing "url" query parameter' });
+    return;
+  }
+
+  try {
+    const axios = (await import('axios')).default;
+    const imgRes = await axios.get(imageUrl, {
+      responseType: 'stream',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        Referer: new URL(imageUrl).origin,
+      },
+      timeout: 20000,
+    });
+
+    const contentType = String(imgRes.headers['content-type'] || 'image/jpeg');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    imgRes.data.pipe(res);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to download image: ${err.message}` });
   }
 });
 

@@ -110,23 +110,21 @@ export async function requestBatchDownload(payload: BatchDownloadRequest): Promi
 }
 
 export async function extractImagesFromUrl(url: string): Promise<ExtractedImage[]> {
-  try {
-    const res = await fetch('/api/images/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (res.ok) {
-      isBackendOnline = true;
-      const data = await res.json();
-      return data.images || [];
-    }
-  } catch {
-    // fallback to rich mock gallery
+  const res = await fetch('/api/extract-images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+    signal: AbortSignal.timeout(25000),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Failed to extract images (${res.status})`);
   }
 
-  return generateMockImages();
+  isBackendOnline = true;
+  const data = await res.json();
+  return data.images || [];
 }
 
 export async function cancelTask(taskId: string): Promise<boolean> {

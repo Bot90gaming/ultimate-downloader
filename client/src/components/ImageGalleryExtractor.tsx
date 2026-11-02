@@ -63,30 +63,53 @@ export const ImageGalleryExtractor: React.FC<ImageGalleryExtractorProps> = ({ on
   };
 
   const handleDownloadZip = async () => {
-    if (selectedIds.size === 0) return;
-    setIsZipping(true);
-    onNotify('info', 'Packaging ZIP Archive', `Bundling ${selectedIds.size} images into a lossless ZIP archive...`);
+    const selectedUrls = images.filter((img) => selectedIds.has(img.id)).map((img) => img.url);
+    if (selectedUrls.length === 0) return;
 
-    // Simulate short packaging delay
-    setTimeout(() => {
+    setIsZipping(true);
+    onNotify('info', 'Creating ZIP Archive', `Bundling ${selectedUrls.length} images into a ZIP archive...`);
+
+    try {
+      const response = await fetch('/api/download-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrls: selectedUrls,
+          zipName: 'extracted_images',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Server failed to assemble ZIP archive');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `images_archive_${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      onNotify('success', 'ZIP Downloaded', `Successfully downloaded ${selectedUrls.length} images.`);
+    } catch (err: any) {
+      onNotify('error', 'ZIP Failed', err.message || 'Could not download ZIP archive');
+    } finally {
       setIsZipping(false);
-      onNotify(
-        'success',
-        'ZIP Download Ready',
-        `Successfully generated batch_images_${Date.now()}.zip with ${selectedIds.size} files.`
-      );
-    }, 1500);
+    }
   };
 
   const handleSingleDownload = (img: ExtractedImage) => {
+    const downloadUrl = `/api/download-image?url=${encodeURIComponent(img.url)}&filename=image_${img.id}.${img.extension || 'jpg'}`;
     const link = document.createElement('a');
-    link.href = img.url;
-    link.target = '_blank';
-    link.download = `image_${img.id}.${img.extension}`;
+    link.href = downloadUrl;
+    link.download = `image_${img.id}.${img.extension || 'jpg'}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    onNotify('success', 'Download Started', `Downloading image ${img.id}.${img.extension}`);
+    onNotify('success', 'Download Started', `Downloading image ${img.id}`);
   };
 
   return (

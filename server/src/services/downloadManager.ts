@@ -254,6 +254,7 @@ export class DownloadManager {
 
     let downloadSucceeded = false;
     let actualRawPath: string | null = null;
+    let ytDlpError: string | null = null;
 
     if (canUseYtDlp) {
       try {
@@ -266,14 +267,18 @@ export class DownloadManager {
           downloadSucceeded = true;
         }
       } catch (err: any) {
-        console.warn(`[DownloadManager] yt-dlp download failed: ${err.message}. Trying direct stream fallback...`);
+        ytDlpError = err.message || 'yt-dlp download failed';
+        console.warn(`[DownloadManager] yt-dlp download failed: ${ytDlpError}. Trying direct stream fallback...`);
       }
     }
 
     if (!downloadSucceeded) {
       // Find best direct URL from formats or metadata
       const matchedFormat = metadata.formats.find((f) => f.formatId === req.formatId) || metadata.formats[0];
-      const directUrl = matchedFormat?.directUrl || metadata.url;
+      const directUrl = matchedFormat?.directUrl || (metadata.platform === 'direct' ? metadata.url : null);
+      if (!directUrl) {
+        throw new Error(ytDlpError || 'Media stream download failed: no valid stream or direct URL available.');
+      }
       const fallbackRaw = path.join(this.downloadsDir, `${taskId}_raw.${targetExt}`);
       await this.downloadDirectStream(taskId, directUrl, fallbackRaw);
       actualRawPath = fallbackRaw;
@@ -284,38 +289,64 @@ export class DownloadManager {
       throw new Error(`Download stream failed: temporary output not found for task ${taskId}`);
     }
 
-    // 4. Post-processing: trimming or audio conversion if requested
-    const needsTrimming = (req.trimStart && req.trimStart.trim() !== '') || (req.trimEnd && req.trimEnd.trim() !== '');
-    const needsConversion = isAudioOnly && !actualRawPath.endsWith(`.${targetExt}`);
-
-    if (needsTrimming || needsConversion) {
-      this.updateTaskProgress(taskId, { status: 'processing', progressPercentage: 90 });
-
-      await ffmpegService.processMedia({
-        inputPath: actualRawPath,
-        outputPath: finalFilePath,
-        audioOnly: isAudioOnly,
-        audioFormat: targetExt as any,
-        trimStart: req.trimStart,
-        trimEnd: req.trimEnd,
-        onProgress: (percent) => {
-          this.updateTaskProgress(taskId, {
-            status: 'processing',
-            progressPercentage: Math.min(99, 90 + Math.round(percent * 0.09)),
-          });
-        },
-      });
-
-      // Cleanup raw intermediate file
-      if (fs.existsSync(actualRawPath)) {
-        try { fs.unlinkSync(actualRawPath); } catch {}
-      }
-    } else {
-      // Determine final destination path (preserve actual extension if yt-dlp created mp3/mkv/mp4)
-      const actualExt = path.extname(actualRawPath).replace('.', '') || targetExt;
+    // 4. Post-processing: image passthrough, trimming, or universal audio/video conversion
+    const isImage = metadata.mediaType === 'image' || req.mediaType === 'image';
+    if (isImage) {
+      const actualExt = path.extname(actualRawPath).replace('.', '') || 'jpg';
       const resolvedFinalPath = path.join(this.downloadsDir, `${taskId}_${baseTitle}.${actualExt}`);
       fs.renameSync(actualRawPath, resolvedFinalPath);
       task.finalFilePath = resolvedFinalPath;
+    } else {
+      let needsUniversalTranscode = false;
+      let probe: any = null;
+      try {
+        probe = await ffmpegService.probeMedia(actualRawPath);
+      } catch {
+        // ignore probe error
+      }
+
+      if (!isAudioOnly) {
+        const vCodec = probe?.video?.codec?.toLowerCase() || '';
+        const aCodec = probe?.audio?.codec?.toLowerCase() || '';
+        const isUniversalVideo = vCodec.includes('h264') || vCodec.includes('avc');
+        const isUniversalAudio = aCodec.includes('aac') || aCodec.includes('mp3');
+        if (!isUniversalVideo || !isUniversalAudio) {
+          needsUniversalTranscode = true;
+        }
+      }
+
+      const needsTrimming = (req.trimStart && req.trimStart.trim() !== '') || (req.trimEnd && req.trimEnd.trim() !== '');
+      const needsConversion = isAudioOnly && !actualRawPath.endsWith(`.${targetExt}`);
+
+      if (needsTrimming || needsConversion || needsUniversalTranscode) {
+        this.updateTaskProgress(taskId, { status: 'processing', progressPercentage: 90 });
+
+        await ffmpegService.processMedia({
+          inputPath: actualRawPath,
+          outputPath: finalFilePath,
+          audioOnly: isAudioOnly,
+          audioFormat: targetExt as any,
+          trimStart: req.trimStart,
+          trimEnd: req.trimEnd,
+          onProgress: (percent) => {
+            this.updateTaskProgress(taskId, {
+              status: 'processing',
+              progressPercentage: Math.min(99, 90 + Math.round(percent * 0.09)),
+            });
+          },
+        });
+
+        // Cleanup raw intermediate file
+        if (fs.existsSync(actualRawPath) && actualRawPath !== finalFilePath) {
+          try { fs.unlinkSync(actualRawPath); } catch {}
+        }
+      } else {
+        // Determine final destination path (preserve actual extension if yt-dlp created mp3/mkv/mp4)
+        const actualExt = path.extname(actualRawPath).replace('.', '') || targetExt;
+        const resolvedFinalPath = path.join(this.downloadsDir, `${taskId}_${baseTitle}.${actualExt}`);
+        fs.renameSync(actualRawPath, resolvedFinalPath);
+        task.finalFilePath = resolvedFinalPath;
+      }
     }
 
     // 5. Complete
@@ -358,6 +389,8 @@ export class DownloadManager {
         '--no-check-certificates',
         '--js-runtimes',
         'node:/usr/bin/node',
+        '-S',
+        'res,vcodec:h264,acodec:m4a',
         '-o',
         outputPath,
       ];
@@ -385,9 +418,14 @@ export class DownloadManager {
 
       let lastReportedPercent = 5;
       let isAudioStream = false;
+      let lastErrorMessage = '';
 
       const parseOutput = (data: Buffer) => {
         const text = data.toString();
+
+        if (text.includes('ERROR:')) {
+          lastErrorMessage = text.trim();
+        }
 
         if (text.includes('[Merger]') || text.includes('[ExtractAudio]') || text.includes('Deleting original file')) {
           this.updateTaskProgress(taskId, {
@@ -472,7 +510,7 @@ export class DownloadManager {
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`yt-dlp process exited with code ${code}`));
+          reject(new Error(lastErrorMessage || `yt-dlp process exited with code ${code}`));
         }
       });
     });
