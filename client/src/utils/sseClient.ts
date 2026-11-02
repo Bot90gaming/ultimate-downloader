@@ -1,4 +1,5 @@
 import { DownloadProgress } from '../../../shared/types';
+import { getApiBaseUrl } from './api';
 
 export type ProgressCallback = (progress: DownloadProgress) => void;
 
@@ -11,7 +12,8 @@ class SseProgressManager {
     if (this.eventSource) return;
 
     try {
-      this.eventSource = new EventSource('/api/events');
+      const base = getApiBaseUrl();
+      this.eventSource = new EventSource(`${base}/api/events`);
 
       const handleIncoming = (event: MessageEvent) => {
         try {

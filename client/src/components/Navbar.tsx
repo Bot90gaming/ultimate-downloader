@@ -54,12 +54,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             {/* Status indicator */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className={`w-1.5 h-1.5 rounded-full ${isBackendOnline ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
-              <span className="text-[11px] font-medium text-slate-300">
-                {isBackendOnline ? 'Engine Online' : 'Engine Ready (Fast Engine)'}
+            <button
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer group"
+              title="Click to configure Backend URL"
+            >
+              <span className={`w-2 h-2 rounded-full ${isBackendOnline ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-[11px] font-medium text-slate-300 group-hover:text-white">
+                {isBackendOnline ? 'Engine Online' : 'Engine: Configure URL'}
               </span>
-            </div>
+            </button>
           </div>
         </div>
 

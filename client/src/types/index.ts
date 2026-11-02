@@ -23,6 +23,7 @@ export interface UserSettings {
   theme: 'dark' | 'light';
   notificationsEnabled: boolean;
   downloadsDirectory: string;
+  backendUrl?: string;
 }
 
 export interface ToastNotification {

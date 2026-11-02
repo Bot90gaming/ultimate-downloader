@@ -22,6 +22,8 @@ import {
   saveLocalHistoryItem,
   deleteLocalHistoryItem,
   clearLocalHistory,
+  getApiBaseUrl,
+  setApiBaseUrl,
 } from './utils/api';
 import { sseManager } from './utils/sseClient';
 import { Navbar } from './components/Navbar';
@@ -44,6 +46,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   theme: 'dark',
   notificationsEnabled: true,
   downloadsDirectory: '~/Downloads/UltimateDownloader',
+  backendUrl: typeof window !== 'undefined' ? localStorage.getItem('ultimate_downloader_backend_url') || '' : '',
 };
 
 export function App() {
@@ -166,7 +169,9 @@ export function App() {
 
               // Automatically trigger browser download of completed file to client device
               try {
-                const downloadUrl = progress.downloadUrl || `/api/files/${progress.taskId}`;
+                const base = getApiBaseUrl();
+                const rawUrl = progress.downloadUrl || `/api/files/${progress.taskId}`;
+                const downloadUrl = rawUrl.startsWith('http') ? rawUrl : `${base}${rawUrl}`;
                 const triggerLink = document.createElement('a');
                 triggerLink.href = downloadUrl;
                 triggerLink.download = progress.fileName || t.fileName || 'download';
@@ -208,7 +213,8 @@ export function App() {
 
   // Initial fetch and synchronization of active tasks
   useEffect(() => {
-    fetch('/api/tasks')
+    const base = getApiBaseUrl();
+    fetch(`${base}/api/tasks`)
       .then((res) => (res.ok ? res.json() : []))
       .then((allTasks: any[]) => {
         if (Array.isArray(allTasks) && allTasks.length > 0) {
@@ -251,7 +257,8 @@ export function App() {
 
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch('/api/tasks');
+        const base = getApiBaseUrl();
+        const res = await fetch(`${base}/api/tasks`);
         if (res.ok) {
           const allTasks = await res.json();
           if (Array.isArray(allTasks)) {
@@ -428,8 +435,16 @@ export function App() {
   const handleSaveSettings = (newSettings: UserSettings) => {
     setSettings(newSettings);
     setTheme(newSettings.theme);
+    setApiBaseUrl(newSettings.backendUrl || '');
     localStorage.setItem('ultimate_downloader_settings', JSON.stringify(newSettings));
-    showToast('success', 'Preferences Saved', 'Your settings have been updated.');
+    checkBackendHealth().then((health) => {
+      setIsBackendOnline(!!health);
+      if (health) {
+        showToast('success', 'Backend Connected', `Connected to backend engine successfully.`);
+      } else {
+        showToast('success', 'Preferences Saved', 'Your settings have been updated.');
+      }
+    });
   };
 
   const handleToggleTheme = () => {

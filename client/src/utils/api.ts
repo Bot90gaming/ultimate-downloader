@@ -10,9 +10,30 @@ import { HistoryItem } from '../types';
 
 let isBackendOnline = false;
 
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('ultimate_downloader_backend_url');
+    if (custom && custom.trim()) {
+      return custom.trim().replace(/\/+$/, '');
+    }
+  }
+  return ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+}
+
+export function setApiBaseUrl(url: string): void {
+  if (typeof window !== 'undefined') {
+    if (url && url.trim()) {
+      localStorage.setItem('ultimate_downloader_backend_url', url.trim().replace(/\/+$/, ''));
+    } else {
+      localStorage.removeItem('ultimate_downloader_backend_url');
+    }
+  }
+}
+
 export async function checkBackendHealth(): Promise<SystemHealth | null> {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch('/api/health', { method: 'GET', signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${base}/api/health`, { method: 'GET', signal: AbortSignal.timeout(4000) });
     if (res.ok) {
       isBackendOnline = true;
       return (await res.json()) as SystemHealth;
@@ -29,10 +50,11 @@ export function getIsBackendOnline(): boolean {
 
 export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
   let lastError: Error | null = null;
+  const base = getApiBaseUrl();
 
   // 1. Try POST /api/info
   try {
-    const res = await fetch('/api/info', {
+    const res = await fetch(`${base}/api/info`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
@@ -43,7 +65,13 @@ export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
       return (await res.json()) as MediaMetadata;
     } else {
       const errJson = await res.json().catch(() => ({}));
-      lastError = new Error(errJson.error || `HTTP ${res.status}: Failed to extract media info`);
+      if (res.status === 405) {
+        lastError = new Error(
+          'Backend not connected (HTTP 405). Vercel only hosts the static frontend. Please open Settings and enter your Backend Server URL (e.g. Cloudflare tunnel or your server IP).'
+        );
+      } else {
+        lastError = new Error(errJson.error || `HTTP ${res.status}: Failed to extract media info`);
+      }
     }
   } catch (err: any) {
     lastError = err;
@@ -51,7 +79,7 @@ export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
 
   // 2. Try GET /api/info?url=... fallback
   try {
-    const res = await fetch(`/api/info?url=${encodeURIComponent(url)}`, {
+    const res = await fetch(`${base}/api/info?url=${encodeURIComponent(url)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(35000),
@@ -68,7 +96,8 @@ export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
 }
 
 export async function requestDownload(payload: DownloadRequest): Promise<{ taskId: string }> {
-  const res = await fetch('/api/download', {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/download`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -77,6 +106,12 @@ export async function requestDownload(payload: DownloadRequest): Promise<{ taskI
 
   if (!res.ok) {
     const errJson = await res.json().catch(() => ({}));
+    if (res.status === 405 || res.status === 503) {
+      throw new Error(
+        errJson.error ||
+          'Video downloads require an active backend engine (FFmpeg & yt-dlp). Please connect your backend server URL in Settings (e.g., Cloudflare tunnel or your server IP).'
+      );
+    }
     throw new Error(errJson.error || `Failed to start download (${res.status})`);
   }
 
@@ -86,8 +121,9 @@ export async function requestDownload(payload: DownloadRequest): Promise<{ taskI
 }
 
 export async function requestBatchDownload(payload: BatchDownloadRequest): Promise<{ taskIds: string[] }> {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch('/api/batch', {
+    const res = await fetch(`${base}/api/batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -110,7 +146,8 @@ export async function requestBatchDownload(payload: BatchDownloadRequest): Promi
 }
 
 export async function extractImagesFromUrl(url: string): Promise<ExtractedImage[]> {
-  const res = await fetch('/api/extract-images', {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/extract-images`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
@@ -128,8 +165,9 @@ export async function extractImagesFromUrl(url: string): Promise<ExtractedImage[
 }
 
 export async function cancelTask(taskId: string): Promise<boolean> {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch(`/api/tasks/${taskId}/cancel`, { method: 'POST' });
+    const res = await fetch(`${base}/api/tasks/${taskId}/cancel`, { method: 'POST' });
     return res.ok;
   } catch {
     return true;
@@ -137,8 +175,9 @@ export async function cancelTask(taskId: string): Promise<boolean> {
 }
 
 export async function pauseTask(taskId: string): Promise<boolean> {
+  const base = getApiBaseUrl();
   try {
-    const res = await fetch(`/api/tasks/${taskId}/pause`, { method: 'POST' });
+    const res = await fetch(`${base}/api/tasks/${taskId}/pause`, { method: 'POST' });
     return res.ok;
   } catch {
     return true;
