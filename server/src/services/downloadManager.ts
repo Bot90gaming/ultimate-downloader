@@ -299,6 +299,7 @@ export class DownloadManager {
       task.finalFilePath = resolvedFinalPath;
     } else {
       let needsUniversalTranscode = false;
+      let copyVideo = false;
       let probe: any = null;
       try {
         probe = await ffmpegService.probeMedia(actualRawPath);
@@ -309,10 +310,19 @@ export class DownloadManager {
       if (!isAudioOnly) {
         const vCodec = probe?.video?.codec?.toLowerCase() || '';
         const aCodec = probe?.audio?.codec?.toLowerCase() || '';
+        const vHeight = probe?.video?.height || 0;
         const isUniversalVideo = vCodec.includes('h264') || vCodec.includes('avc');
         const isUniversalAudio = aCodec.includes('aac') || aCodec.includes('mp3');
-        if (!isUniversalVideo || !isUniversalAudio) {
+
+        if (!isUniversalAudio) {
           needsUniversalTranscode = true;
+          // If video is already H.264 or high-res (>1080p), stream copy video so only audio is transcoded!
+          if (isUniversalVideo || vHeight > 1080 || vCodec.includes('vp9')) {
+            copyVideo = true;
+          }
+        } else if (!isUniversalVideo && vHeight <= 1080) {
+          needsUniversalTranscode = true;
+          copyVideo = false;
         }
       }
 
@@ -320,7 +330,12 @@ export class DownloadManager {
       const needsConversion = isAudioOnly && !actualRawPath.endsWith(`.${targetExt}`);
 
       if (needsTrimming || needsConversion || needsUniversalTranscode) {
-        this.updateTaskProgress(taskId, { status: 'processing', progressPercentage: 90 });
+        this.updateTaskProgress(taskId, {
+          status: 'processing',
+          progressPercentage: 90,
+          speedBytesPerSecond: 0,
+          etaSeconds: 0,
+        });
 
         await ffmpegService.processMedia({
           inputPath: actualRawPath,
@@ -329,10 +344,13 @@ export class DownloadManager {
           audioFormat: targetExt as any,
           trimStart: req.trimStart,
           trimEnd: req.trimEnd,
+          copyVideo,
           onProgress: (percent) => {
             this.updateTaskProgress(taskId, {
               status: 'processing',
               progressPercentage: Math.min(99, 90 + Math.round(percent * 0.09)),
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
             });
           },
         });

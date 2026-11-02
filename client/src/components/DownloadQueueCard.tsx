@@ -134,11 +134,13 @@ export const DownloadQueueCard: React.FC<DownloadQueueCardProps> = ({
                       <span>Failed</span>
                     </span>
                   ) : isProcessing ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs font-semibold">
-                      <span>Muxing FFmpeg</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                      <span>Optimizing {Math.round(task.progressPercentage)}%</span>
                     </span>
                   ) : isFetching ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-xs font-semibold">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-xs font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                       <span>Extracting streams</span>
                     </span>
                   ) : (
@@ -208,12 +210,16 @@ export const DownloadQueueCard: React.FC<DownloadQueueCardProps> = ({
                 <div className="flex items-center justify-between mt-2.5 text-xs text-slate-400">
                   <div className="flex items-center gap-1.5 text-slate-300">
                     <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                    <span className="font-mono">{formatSpeed(task.speedBytesPerSecond)}</span>
+                    <span className="font-mono">
+                      {isProcessing ? 'FFmpeg Transcoding' : isFetching ? 'Connecting to source...' : formatSpeed(task.speedBytesPerSecond)}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 text-slate-300">
                     <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="font-mono">{formatEta(task.etaSeconds)}</span>
+                    <span className="font-mono">
+                      {isProcessing ? 'Finalizing audio & video...' : isFetching ? 'Analyzing...' : formatEta(task.etaSeconds)}
+                    </span>
                   </div>
                 </div>
               )}

@@ -30,6 +30,7 @@ export interface MediaProcessOptions {
   audioBitrate?: string;
   trimStart?: string; // "00:00:10" or "10"
   trimEnd?: string;   // "00:00:30" or "30"
+  copyVideo?: boolean; // stream copy video (1-2s) when only audio or container needs conversion
   onProgress?: (progressPercent: number) => void;
 }
 
@@ -257,7 +258,7 @@ export class FfmpegService {
    * Combined processing pipeline: handles audio extraction, format conversion, and trimming.
    */
   public async processMedia(options: MediaProcessOptions): Promise<string> {
-    const { inputPath, outputPath, audioOnly, audioFormat = 'mp3', audioBitrate = '320k', trimStart, trimEnd, onProgress } = options;
+    const { inputPath, outputPath, audioOnly, audioFormat = 'mp3', audioBitrate = '320k', trimStart, trimEnd, copyVideo, onProgress } = options;
 
     if (!fs.existsSync(inputPath)) {
       throw new Error(`Input file does not exist: ${inputPath}`);
@@ -310,12 +311,24 @@ export class FfmpegService {
           args.push('-c:a', 'libmp3lame', '-b:a', '320k');
           break;
       }
+    } else if (copyVideo && !trimStart && !trimEnd) {
+      // High-speed lossless stream copy for video + universal AAC stereo audio (completes in 1-2s)
+      args.push(
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '44100',
+        '-ac', '2',
+        '-movflags', '+faststart'
+      );
     } else {
-      // Universal Video Output: H.264 (AVC) + AAC + faststart + yuv420p for 100% universal multi-device playback (iOS, Android, Windows, Mac)
+      // Universal Video Output: H.264 (AVC) + AAC + faststart + yuv420p for 100% universal multi-device playback
+      // High-performance multi-threaded fast transcoding
       args.push(
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '21',
+        '-preset', 'veryfast',
+        '-crf', '22',
+        '-threads', '0',
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
         '-b:a', '192k',
