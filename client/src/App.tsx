@@ -347,8 +347,9 @@ export function App() {
       if (!isBackendOnline) {
         sseManager.simulateTaskProgress(taskId, filename, newTask.totalBytes);
       }
-    } catch {
-      showToast('error', 'Download Error', 'Failed to initialize download worker.');
+    } catch (err: any) {
+      showToast('error', 'Download Error', err.message || 'Failed to initialize download worker.');
+      setIsSettingsOpen(true);
     }
   };
 
@@ -379,8 +380,9 @@ export function App() {
 
       setTasks((prev) => [...newTasks, ...prev]);
       setActiveTab('single'); // Switch to main screen to view download manager
-    } catch {
-      showToast('error', 'Batch Failed', 'Failed to process batch items.');
+    } catch (err: any) {
+      showToast('error', 'Batch Failed', err.message || 'Failed to process batch items.');
+      setIsSettingsOpen(true);
     }
   };
 

@@ -7,8 +7,8 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  // 1. If BACKEND_URL is set in Vercel environment variables, proxy directly
-  const backendUrl = process.env.BACKEND_URL;
+  // 1. If BACKEND_URL is set or active tunnel is available, proxy directly
+  const backendUrl = process.env.BACKEND_URL || 'https://carefully-expectations-people-tamil.trycloudflare.com';
   if (backendUrl) {
     try {
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/info`, {

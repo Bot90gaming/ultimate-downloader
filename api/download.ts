@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const backendUrl = process.env.BACKEND_URL;
+  const backendUrl = process.env.BACKEND_URL || 'https://carefully-expectations-people-tamil.trycloudflare.com';
   if (backendUrl) {
     try {
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/download`, {

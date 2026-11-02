@@ -30,6 +30,10 @@ export class MediaExtractor {
   private resolveYtDlpBinary(): string {
     const home = process.env.HOME || '/home/hoshirun';
     const candidates = [
+      path.resolve(__dirname, '../../../yt-dlp'),
+      path.resolve(process.cwd(), 'yt-dlp'),
+      path.resolve(process.cwd(), '../yt-dlp'),
+      '/home/hoshirun/Projects/ultimate-downloader/yt-dlp',
       path.join(home, '.local/bin/yt-dlp'),
       '/usr/local/bin/yt-dlp',
       '/usr/bin/yt-dlp',

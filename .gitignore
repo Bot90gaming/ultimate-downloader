@@ -40,3 +40,7 @@ Thumbs.db
 .antigravity/
 .vercel
 .env*
+.vercel-data/
+cloudflared
+yt-dlp
+
