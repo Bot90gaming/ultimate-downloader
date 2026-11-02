@@ -15,6 +15,7 @@ import type {
 import { mediaExtractor } from './mediaExtractor';
 import { ffmpegService } from './ffmpegService';
 import { imageBatchArchiver } from './imageBatchArchiver';
+import { CookieHelper } from './cookieHelper';
 
 interface InternalTask {
   progress: DownloadProgress;
@@ -383,6 +384,7 @@ export class DownloadManager {
 
       const ytDlpStatus = mediaExtractor['ytDlpPath'] || 'yt-dlp';
 
+      const cookieArgs = CookieHelper.getCookieArgs();
       const args = [
         '--no-playlist',
         '--newline',
@@ -391,6 +393,7 @@ export class DownloadManager {
         'node:/usr/bin/node',
         '-S',
         'res,vcodec:h264,acodec:m4a',
+        ...cookieArgs,
         '-o',
         outputPath,
       ];

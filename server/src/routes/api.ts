@@ -11,6 +11,7 @@ import { mediaExtractor } from '../services/mediaExtractor';
 import { downloadManager } from '../services/downloadManager';
 import { ffmpegService } from '../services/ffmpegService';
 import { imageBatchArchiver } from '../services/imageBatchArchiver';
+import { CookieHelper } from '../services/cookieHelper';
 
 const router = Router();
 
@@ -267,6 +268,34 @@ router.post('/download-zip', async (req: Request, res: Response, next: NextFunct
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * GET /api/cookies/status
+ * Reports cookie authentication state for YouTube/social bot challenges.
+ */
+router.get('/cookies/status', (req: Request, res: Response) => {
+  const filePath = CookieHelper.resolveCookieFilePath();
+  const browserCandidate = CookieHelper.resolveBrowserCandidate();
+  res.json({
+    hasCookies: CookieHelper.hasCookies(),
+    cookiePath: filePath ? path.basename(filePath) : null,
+    browserProfile: browserCandidate || null,
+  });
+});
+
+/**
+ * POST /api/cookies/upload
+ * Saves user-provided cookies.txt for authentication.
+ */
+router.post('/cookies/upload', (req: Request, res: Response) => {
+  const { cookiesContent } = req.body;
+  if (!cookiesContent || typeof cookiesContent !== 'string') {
+    res.status(400).json({ error: 'cookiesContent string is required.' });
+    return;
+  }
+  const savedPath = CookieHelper.saveCookies(cookiesContent);
+  res.json({ success: true, savedPath });
 });
 
 export default router;

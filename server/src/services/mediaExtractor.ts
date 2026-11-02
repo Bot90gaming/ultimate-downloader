@@ -11,6 +11,7 @@ import type {
   MediaMetadata,
 } from '../../../shared/types';
 import { imageBatchArchiver } from './imageBatchArchiver';
+import { CookieHelper } from './cookieHelper';
 
 export class MediaExtractor {
   private ytDlpPath: string;
@@ -163,6 +164,7 @@ export class MediaExtractor {
    */
   private async extractWithYtDlp(url: string, platform: SupportedPlatform): Promise<MediaMetadata> {
     return new Promise((resolve, reject) => {
+      const cookieArgs = CookieHelper.getCookieArgs();
       const args = [
         '--dump-single-json',
         '--no-playlist',
@@ -170,6 +172,7 @@ export class MediaExtractor {
         '--no-check-certificates',
         '--js-runtimes',
         'node:/usr/bin/node',
+        ...cookieArgs,
         url,
       ];
 

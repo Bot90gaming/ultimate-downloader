@@ -20,6 +20,8 @@ out/
 downloads/
 temp/
 *.log
+*cookies.txt
+*.sqlite
 
 # Environment variables
 .env
