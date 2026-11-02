@@ -1,0 +1,7 @@
+downloads/
+node_modules/
+electron/
+docker/
+tests/
+.git/
+*.log
