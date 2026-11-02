@@ -231,15 +231,14 @@ export class DownloadManager {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
-    const isAudioOnly = !!req.audioOnly || req.mediaType === 'audio';
+    const isAudioOnly = !!req.audioOnly || req.mediaType === 'audio' || req.formatId?.includes('audio') || req.formatId?.includes('mp3');
     const targetExt = req.extension || (isAudioOnly ? 'mp3' : 'mp4');
 
     const baseTitle = this.sanitizeFileName(req.customFilename || metadata.title || 'download');
     const finalFileName = `${baseTitle}.${targetExt}`;
-    const rawDownloadPath = path.join(this.downloadsDir, `${taskId}_raw.${targetExt}`);
+    const rawDownloadTemplate = path.join(this.downloadsDir, `${taskId}_raw.%(ext)s`);
     const finalFilePath = path.join(this.downloadsDir, `${taskId}_${finalFileName}`);
 
-    task.tempFilePath = rawDownloadPath;
     task.finalFilePath = finalFilePath;
 
     this.updateTaskProgress(taskId, {
@@ -252,11 +251,18 @@ export class DownloadManager {
     const canUseYtDlp = ytDlpStatus.available && metadata.platform !== 'direct';
 
     let downloadSucceeded = false;
+    let actualRawPath: string | null = null;
 
     if (canUseYtDlp) {
       try {
-        await this.downloadWithYtDlp(taskId, req.url, rawDownloadPath, req.formatId, isAudioOnly);
-        downloadSucceeded = true;
+        await this.downloadWithYtDlp(taskId, req.url, rawDownloadTemplate, req.formatId, isAudioOnly);
+        // Find generated file matching taskId_raw.*
+        const matches = fs.readdirSync(this.downloadsDir).filter((f) => f.startsWith(`${taskId}_raw`));
+        if (matches.length > 0) {
+          actualRawPath = path.join(this.downloadsDir, matches[0]);
+          task.tempFilePath = actualRawPath;
+          downloadSucceeded = true;
+        }
       } catch (err: any) {
         console.warn(`[DownloadManager] yt-dlp download failed: ${err.message}. Trying direct stream fallback...`);
       }
@@ -266,19 +272,25 @@ export class DownloadManager {
       // Find best direct URL from formats or metadata
       const matchedFormat = metadata.formats.find((f) => f.formatId === req.formatId) || metadata.formats[0];
       const directUrl = matchedFormat?.directUrl || metadata.url;
+      const fallbackRaw = path.join(this.downloadsDir, `${taskId}_raw.${targetExt}`);
+      await this.downloadDirectStream(taskId, directUrl, fallbackRaw);
+      actualRawPath = fallbackRaw;
+      task.tempFilePath = actualRawPath;
+    }
 
-      await this.downloadDirectStream(taskId, directUrl, rawDownloadPath);
+    if (!actualRawPath || !fs.existsSync(actualRawPath)) {
+      throw new Error(`Download stream failed: temporary output not found for task ${taskId}`);
     }
 
     // 4. Post-processing: trimming or audio conversion if requested
     const needsTrimming = (req.trimStart && req.trimStart.trim() !== '') || (req.trimEnd && req.trimEnd.trim() !== '');
-    const needsConversion = isAudioOnly && !rawDownloadPath.endsWith(`.${targetExt}`);
+    const needsConversion = isAudioOnly && !actualRawPath.endsWith(`.${targetExt}`);
 
     if (needsTrimming || needsConversion) {
       this.updateTaskProgress(taskId, { status: 'processing', progressPercentage: 90 });
 
       await ffmpegService.processMedia({
-        inputPath: rawDownloadPath,
+        inputPath: actualRawPath,
         outputPath: finalFilePath,
         audioOnly: isAudioOnly,
         audioFormat: targetExt as any,
@@ -293,25 +305,28 @@ export class DownloadManager {
       });
 
       // Cleanup raw intermediate file
-      if (fs.existsSync(rawDownloadPath)) {
-        try { fs.unlinkSync(rawDownloadPath); } catch {}
+      if (fs.existsSync(actualRawPath)) {
+        try { fs.unlinkSync(actualRawPath); } catch {}
       }
     } else {
-      // Rename raw download to final output path
-      if (fs.existsSync(rawDownloadPath)) {
-        fs.renameSync(rawDownloadPath, finalFilePath);
-      }
+      // Determine final destination path (preserve actual extension if yt-dlp created mp3/mkv/mp4)
+      const actualExt = path.extname(actualRawPath).replace('.', '') || targetExt;
+      const resolvedFinalPath = path.join(this.downloadsDir, `${taskId}_${baseTitle}.${actualExt}`);
+      fs.renameSync(actualRawPath, resolvedFinalPath);
+      task.finalFilePath = resolvedFinalPath;
     }
 
     // 5. Complete
-    const finalStat = fs.existsSync(finalFilePath) ? fs.statSync(finalFilePath) : null;
+    const finalStat = task.finalFilePath && fs.existsSync(task.finalFilePath) ? fs.statSync(task.finalFilePath) : null;
     const finalSize = finalStat ? finalStat.size : task.progress.totalBytes;
+    const resolvedName = task.finalFilePath ? path.basename(task.finalFilePath).replace(`${taskId}_`, '') : finalFileName;
 
     this.updateTaskProgress(taskId, {
       status: 'completed',
       progressPercentage: 100,
-      fileName: finalFileName,
-      filePath: finalFilePath,
+      fileName: resolvedName,
+      filePath: task.finalFilePath,
+      downloadUrl: `/api/files/${taskId}`,
       downloadedBytes: finalSize,
       totalBytes: finalSize,
       speedBytesPerSecond: 0,
@@ -339,15 +354,26 @@ export class DownloadManager {
         '--no-playlist',
         '--newline',
         '--no-check-certificates',
-        '-o', outputPath,
+        '--js-runtimes',
+        'node:/usr/bin/node',
+        '-o',
+        outputPath,
       ];
 
-      if (audioOnly) {
+      if (audioOnly || formatId?.includes('audio') || formatId?.includes('mp3')) {
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
-      } else if (formatId && formatId !== 'original') {
-        args.push('-f', `${formatId}+bestaudio/best`);
+      } else if (formatId === '1080p' || formatId === 'mp4-1080p') {
+        args.push('-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best', '--merge-output-format', 'mp4');
+      } else if (formatId === '720p' || formatId === 'mp4-720p') {
+        args.push('-f', 'bestvideo[height<=720]+bestaudio/best[height<=720]/best', '--merge-output-format', 'mp4');
+      } else if (formatId === '480p') {
+        args.push('-f', 'bestvideo[height<=480]+bestaudio/best[height<=480]/best', '--merge-output-format', 'mp4');
+      } else if (formatId === '360p') {
+        args.push('-f', 'bestvideo[height<=360]+bestaudio/best[height<=360]/best', '--merge-output-format', 'mp4');
+      } else if (formatId && formatId !== 'best' && formatId !== 'original') {
+        args.push('-f', `${formatId}+bestaudio/best`, '--merge-output-format', 'mp4');
       } else {
-        args.push('-f', 'bestvideo+bestaudio/best');
+        args.push('-f', 'bestvideo+bestaudio/best', '--merge-output-format', 'mp4');
       }
 
       args.push(url);
@@ -377,9 +403,21 @@ export class DownloadManager {
               else if (parts.length === 3) etaSecs = parts[0] * 3600 + parts[1] * 60 + parts[2];
             }
 
+            let speedBytes = 0;
+            if (speedMatch) {
+              const speedStr = speedMatch[1].trim();
+              let multiplier = 1;
+              if (/k/i.test(speedStr)) multiplier = 1024;
+              else if (/m/i.test(speedStr)) multiplier = 1024 * 1024;
+              else if (/g/i.test(speedStr)) multiplier = 1024 * 1024 * 1024;
+              const num = parseFloat(speedStr);
+              if (!isNaN(num)) speedBytes = Math.round(num * multiplier);
+            }
+
             this.updateTaskProgress(taskId, {
               status: 'downloading',
               progressPercentage: Math.min(99, Math.round(percent * 10) / 10),
+              speedBytesPerSecond: speedBytes,
               etaSeconds: etaSecs,
             });
           }
@@ -387,7 +425,6 @@ export class DownloadManager {
       });
 
       child.stderr.on('data', (data) => {
-        // Log stderr warnings without failing immediately
         console.warn(`[yt-dlp stderr] ${data.toString().trim()}`);
       });
 
@@ -569,17 +606,33 @@ export class DownloadManager {
    */
   public getCompletedFile(taskId: string): { filePath: string; fileName: string } | null {
     const task = this.tasks.get(taskId);
-    if (!task || task.progress.status !== 'completed' || !task.finalFilePath) {
+    if (!task || task.progress.status !== 'completed') {
       return null;
     }
 
-    if (!fs.existsSync(task.finalFilePath)) {
+    let filePath = task.finalFilePath;
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Look for any file in downloadsDir starting with taskId and not containing _raw
+      try {
+        const matches = fs.readdirSync(this.downloadsDir).filter((f) => f.startsWith(taskId) && !f.includes('_raw'));
+        if (matches.length > 0) {
+          filePath = path.join(this.downloadsDir, matches[0]);
+          task.finalFilePath = filePath;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
       return null;
     }
 
+    const fileName = task.progress.fileName || path.basename(filePath).replace(`${taskId}_`, '');
     return {
-      filePath: task.finalFilePath,
-      fileName: task.progress.fileName || path.basename(task.finalFilePath),
+      filePath,
+      fileName,
     };
   }
 

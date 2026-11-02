@@ -164,6 +164,19 @@ export function App() {
               saveLocalHistoryItem(historyEntry);
               setHistory(getLocalHistory());
 
+              // Automatically trigger browser download of completed file to client device
+              try {
+                const downloadUrl = progress.downloadUrl || `/api/files/${progress.taskId}`;
+                const triggerLink = document.createElement('a');
+                triggerLink.href = downloadUrl;
+                triggerLink.download = progress.fileName || t.fileName || 'download';
+                document.body.appendChild(triggerLink);
+                triggerLink.click();
+                document.body.removeChild(triggerLink);
+              } catch (dlErr) {
+                console.warn('Auto download trigger notice:', dlErr);
+              }
+
               showToast(
                 'success',
                 'Download Completed!',
@@ -223,8 +236,8 @@ export function App() {
           audioOnly: settings.defaultFormat === 'audio_only',
         });
       }
-    } catch {
-      showToast('error', 'Analysis Failed', 'Could not parse media details from the provided URL.');
+    } catch (err: any) {
+      showToast('error', 'Analysis Failed', err.message || 'Could not parse media details from the provided URL.');
     } finally {
       setIsLoading(false);
     }

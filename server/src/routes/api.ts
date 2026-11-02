@@ -49,12 +49,33 @@ router.get('/health', async (req: Request, res: Response, next: NextFunction) =>
 });
 
 /**
- * POST /api/info
- * Extracts metadata, format list, and gallery from a given media URL.
+ * GET /api/info
+ * Extracts metadata, format list, and gallery from a given media URL query parameter.
  */
-router.post('/info', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/info', async (req: Request, res: Response) => {
   try {
-    const { url } = req.body;
+    const url = (req.query.url as string) || '';
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      res.status(400).json({ error: 'Valid "url" query parameter is required.' });
+      return;
+    }
+
+    const info: MediaMetadata = await mediaExtractor.extractInfo(url.trim());
+    res.json(info);
+  } catch (err: any) {
+    res.status(422).json({
+      error: err.message || 'Failed to inspect media URL.',
+    });
+  }
+});
+
+/**
+ * POST /api/info
+ * Extracts metadata, format list, and gallery from a given media URL in body or query.
+ */
+router.post('/info', async (req: Request, res: Response) => {
+  try {
+    const url = req.body?.url || req.query?.url;
     if (!url || typeof url !== 'string' || !url.trim()) {
       res.status(400).json({ error: 'Valid URL is required in request body.' });
       return;
@@ -65,7 +86,6 @@ router.post('/info', async (req: Request, res: Response, next: NextFunction) => 
   } catch (err: any) {
     res.status(422).json({
       error: err.message || 'Failed to inspect media URL.',
-      details: err.stack,
     });
   }
 });

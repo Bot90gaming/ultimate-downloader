@@ -28,43 +28,61 @@ export function getIsBackendOnline(): boolean {
 }
 
 export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
+  let lastError: Error | null = null;
+
+  // 1. Try POST /api/info
+  try {
+    const res = await fetch('/api/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      signal: AbortSignal.timeout(35000),
+    });
+    if (res.ok) {
+      isBackendOnline = true;
+      return (await res.json()) as MediaMetadata;
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      lastError = new Error(errJson.error || `HTTP ${res.status}: Failed to extract media info`);
+    }
+  } catch (err: any) {
+    lastError = err;
+  }
+
+  // 2. Try GET /api/info?url=... fallback
   try {
     const res = await fetch(`/api/info?url=${encodeURIComponent(url)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(35000),
     });
     if (res.ok) {
       isBackendOnline = true;
       return (await res.json()) as MediaMetadata;
     }
   } catch {
-    // Backend offline or unreachable, fall back to realistic mock for demonstration
+    // ignore
   }
 
-  // Provide realistic mock data based on platform so the user can test all UI interactions immediately
-  return generateMockMediaMetadata(url);
+  throw lastError || new Error('Could not parse media details from the provided URL.');
 }
 
 export async function requestDownload(payload: DownloadRequest): Promise<{ taskId: string }> {
-  try {
-    const res = await fetch('/api/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.ok) {
-      isBackendOnline = true;
-      const data = await res.json();
-      return { taskId: data.taskId };
-    }
-  } catch {
-    // fallback simulation
+  const res = await fetch('/api/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.error || `Failed to start download (${res.status})`);
   }
 
-  // Return a mock task ID for immediate UI demonstration
-  return { taskId: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` };
+  isBackendOnline = true;
+  const data = await res.json();
+  return { taskId: data.taskId };
 }
 
 export async function requestBatchDownload(payload: BatchDownloadRequest): Promise<{ taskIds: string[] }> {

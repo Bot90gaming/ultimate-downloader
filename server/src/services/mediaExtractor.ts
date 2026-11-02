@@ -27,10 +27,12 @@ export class MediaExtractor {
   }
 
   private resolveYtDlpBinary(): string {
+    const home = process.env.HOME || '/home/hoshirun';
     const candidates = [
+      path.join(home, '.local/bin/yt-dlp'),
       '/usr/local/bin/yt-dlp',
       '/usr/bin/yt-dlp',
-      path.join(process.env.HOME || '', '.local/bin/yt-dlp'),
+      path.join(home, 'bin/yt-dlp'),
       'yt-dlp',
     ];
     for (const c of candidates) {
@@ -166,11 +168,12 @@ export class MediaExtractor {
         '--no-playlist',
         '--no-warnings',
         '--no-check-certificates',
-        '--prefer-free-formats',
+        '--js-runtimes',
+        'node:/usr/bin/node',
         url,
       ];
 
-      execFile(this.ytDlpPath, args, { maxBuffer: 30 * 1024 * 1024, timeout: 25000 }, (error, stdout, stderr) => {
+      execFile(this.ytDlpPath, args, { maxBuffer: 50 * 1024 * 1024, timeout: 35000 }, (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
           return;
@@ -180,6 +183,56 @@ export class MediaExtractor {
           const raw = JSON.parse(stdout);
           const formats: MediaFormat[] = [];
           const seenFormatKeys = new Set<string>();
+
+          // Prepend high-level standard choices
+          formats.push(
+            {
+              formatId: 'best',
+              extension: 'mp4',
+              resolution: 'Best Available',
+              qualityLabel: 'Best Quality (Auto MP4)',
+              hasVideo: true,
+              hasAudio: true,
+            },
+            {
+              formatId: '1080p',
+              extension: 'mp4',
+              resolution: '1080p',
+              qualityLabel: 'Full HD 1080p (MP4)',
+              hasVideo: true,
+              hasAudio: true,
+            },
+            {
+              formatId: '720p',
+              extension: 'mp4',
+              resolution: '720p',
+              qualityLabel: 'HD 720p (MP4)',
+              hasVideo: true,
+              hasAudio: true,
+            },
+            {
+              formatId: 'audio-mp3-320k',
+              extension: 'mp3',
+              resolution: '320kbps',
+              qualityLabel: 'MP3 Audio (320kbps High Quality)',
+              hasVideo: false,
+              hasAudio: true,
+            },
+            {
+              formatId: 'audio-mp3-128k',
+              extension: 'mp3',
+              resolution: '128kbps',
+              qualityLabel: 'MP3 Audio (128kbps Standard)',
+              hasVideo: false,
+              hasAudio: true,
+            }
+          );
+
+          seenFormatKeys.add('best');
+          seenFormatKeys.add('1080p');
+          seenFormatKeys.add('720p');
+          seenFormatKeys.add('audio-mp3-320k');
+          seenFormatKeys.add('audio-mp3-128k');
 
           const rawFormats: any[] = raw.formats || [];
 
@@ -191,7 +244,7 @@ export class MediaExtractor {
             const resolution = height > 0 ? `${height}p` : f.format_note || (hasAudio && !hasVideo ? 'Audio' : undefined);
 
             const formatId = f.format_id || 'format';
-            const key = `${ext}-${resolution || ''}-${hasVideo ? 'v' : ''}${hasAudio ? 'a' : ''}`;
+            const key = `${formatId}`;
 
             if (seenFormatKeys.has(key)) continue;
             seenFormatKeys.add(key);
@@ -214,11 +267,14 @@ export class MediaExtractor {
             });
           }
 
-          // If no combined audio+video formats exist, add standard synthesized options
-          this.ensureStandardFormats(formats, raw.duration);
-
           const duration = raw.duration ? Math.round(raw.duration) : undefined;
-          const thumbnail = raw.thumbnail || (raw.thumbnails && raw.thumbnails.length ? raw.thumbnails[raw.thumbnails.length - 1].url : '');
+          let thumbnail = raw.thumbnail || '';
+          if (!thumbnail && raw.thumbnails && raw.thumbnails.length > 0) {
+            thumbnail = raw.thumbnails[raw.thumbnails.length - 1].url;
+          }
+          if (!thumbnail && platform === 'youtube' && raw.id) {
+            thumbnail = `https://i.ytimg.com/vi/${raw.id}/hqdefault.jpg`;
+          }
 
           const author = raw.uploader || raw.channel || raw.creator
             ? {
@@ -228,9 +284,9 @@ export class MediaExtractor {
             : undefined;
 
           resolve({
-            id: raw.id || `yt-${Date.now()}`,
+            id: raw.id || `media-${Date.now()}`,
             url,
-            title: raw.title || 'Untitled Media',
+            title: raw.title || raw.fulltitle || 'Untitled Media',
             description: raw.description ? raw.description.slice(0, 500) : undefined,
             thumbnail,
             duration,

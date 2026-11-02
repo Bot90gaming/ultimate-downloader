@@ -122,9 +122,15 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
         <div className="md:col-span-5 relative group">
           <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-md">
             <img
-              src={metadata.thumbnail}
+              src={metadata.thumbnail || (metadata.platform === 'youtube' && metadata.id ? `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg` : '')}
               alt={metadata.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (metadata.platform === 'youtube' && metadata.id && !target.src.includes('hqdefault.jpg')) {
+                  target.src = `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg`;
+                }
+              }}
               loading="lazy"
             />
             {/* Ambient vignette */}

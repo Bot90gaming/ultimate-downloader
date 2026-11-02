@@ -31,6 +31,7 @@ if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir, { recursive: true });
 }
 app.use('/downloads', express.static(downloadsDir));
+app.use('/api/downloads', express.static(downloadsDir));
 
 // Mount API routes
 app.use('/api', apiRouter);
@@ -77,7 +78,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 // Start HTTP Server only when executed directly
 let server: any = null;
 if (require.main === module || !process.env.NODE_ENV?.includes('test')) {
-  server = app.listen(PORT, () => {
+  server = app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`===============================================`);
     console.log(`🚀 Ultimate Downloader Server running on port ${PORT}`);
     console.log(`📁 Downloads directory: ${downloadsDir}`);

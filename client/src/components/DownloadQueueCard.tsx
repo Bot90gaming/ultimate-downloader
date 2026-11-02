@@ -154,9 +154,10 @@ export const DownloadQueueCard: React.FC<DownloadQueueCardProps> = ({
                       download={task.fileName || 'download'}
                       aria-label="Download finished file"
                       title="Save / Download File"
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 cursor-pointer transition-colors"
+                      className="min-h-[44px] px-3.5 py-1.5 flex items-center gap-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
                     >
-                      <FileCheck className="w-4 h-4" />
+                      <Download className="w-4 h-4 text-slate-950" />
+                      <span>Save to Device</span>
                     </a>
                   )}
 
