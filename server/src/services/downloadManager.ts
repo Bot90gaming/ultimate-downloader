@@ -407,6 +407,7 @@ export class DownloadManager {
         '--no-playlist',
         '--newline',
         '--no-check-certificates',
+        '--force-ipv4',
         '--js-runtimes',
         'node:/usr/bin/node',
         '-S',

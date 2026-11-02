@@ -174,6 +174,7 @@ export class MediaExtractor {
         '--no-playlist',
         '--no-warnings',
         '--no-check-certificates',
+        '--force-ipv4',
         '--js-runtimes',
         'node:/usr/bin/node',
         ...cookieArgs,

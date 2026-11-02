@@ -3,8 +3,14 @@ import cors from 'cors';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
+import * as dns from 'dns';
 import apiRouter from './routes/api';
 import { downloadManager } from './services/downloadManager';
+
+// Prefer IPv4 to avoid getaddrinfo EAI_AGAIN on networks without working IPv6
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 
 // Load environment variables from .env
 dotenv.config();
