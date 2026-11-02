@@ -13,24 +13,38 @@ class SseProgressManager {
     try {
       this.eventSource = new EventSource('/api/events');
 
-      this.eventSource.onmessage = (event) => {
+      const handleIncoming = (event: MessageEvent) => {
         try {
+          if (!event.data || typeof event.data !== 'string' || event.data.startsWith(':')) return;
           const data: DownloadProgress = JSON.parse(event.data);
-          this.notify(data);
+          if (data && data.taskId) {
+            this.notify(data);
+          }
         } catch {
           // ignore parsing error
         }
       };
 
+      this.eventSource.onmessage = handleIncoming;
+      this.eventSource.addEventListener('progress', handleIncoming);
+      this.eventSource.addEventListener('complete', handleIncoming);
+      this.eventSource.addEventListener('error', handleIncoming);
+      this.eventSource.addEventListener('message', handleIncoming);
+
       this.eventSource.onerror = () => {
-        // SSE disconnected, will auto-reconnect
+        // SSE disconnected, will auto-reconnect after close
         if (this.eventSource) {
           this.eventSource.close();
           this.eventSource = null;
         }
+        // Auto-reconnect after delay
+        setTimeout(() => {
+          if (this.listeners.size > 0) {
+            this.connect();
+          }
+        }, 2000);
       };
     } catch {
-      // EventSource not supported or failed to create
       this.eventSource = null;
     }
   }

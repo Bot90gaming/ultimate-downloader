@@ -206,6 +206,68 @@ export function App() {
     return () => unsubscribe();
   }, [showToast]);
 
+  // Initial fetch and synchronization of active tasks
+  useEffect(() => {
+    fetch('/api/tasks')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((allTasks: any[]) => {
+        if (Array.isArray(allTasks) && allTasks.length > 0) {
+          setTasks((prev) => {
+            const existingIds = new Set(prev.map((t) => t.taskId));
+            const newItems: DownloadTaskItem[] = allTasks
+              .filter((p) => !existingIds.has(p.taskId))
+              .map((p) => ({
+                taskId: p.taskId,
+                url: p.downloadUrl || '',
+                status: p.status,
+                progressPercentage: p.progressPercentage,
+                downloadedBytes: p.downloadedBytes,
+                totalBytes: p.totalBytes,
+                speedBytesPerSecond: p.speedBytesPerSecond,
+                etaSeconds: p.etaSeconds,
+                fileName: p.fileName,
+                filePath: p.filePath,
+                downloadUrl: p.downloadUrl,
+                error: p.error,
+                createdAt: p.timestamp || Date.now(),
+              }));
+            return [...newItems, ...prev];
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Recurring polling fallback while downloads are running
+  useEffect(() => {
+    const hasActiveTasks = tasks.some(
+      (t) =>
+        t.status === 'downloading' ||
+        t.status === 'processing' ||
+        t.status === 'queued' ||
+        t.status === 'fetching_info'
+    );
+    if (!hasActiveTasks) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/tasks');
+        if (res.ok) {
+          const allTasks = await res.json();
+          if (Array.isArray(allTasks)) {
+            for (const p of allTasks) {
+              sseManager.notify(p);
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [tasks]);
+
   // Tab switching helpers
   const handleSelectTab = (tab: ActiveTab) => {
     setActiveTab(tab);

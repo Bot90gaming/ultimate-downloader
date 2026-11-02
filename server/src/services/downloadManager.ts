@@ -75,7 +75,9 @@ export class DownloadManager {
    * Broadcasts Server-Sent Events to all active listeners.
    */
   public broadcast(eventName: string, data: any): void {
-    const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+    const jsonStr = JSON.stringify(data);
+    // Send both named event and default message event for universal SSE client compatibility
+    const payload = `event: ${eventName}\ndata: ${jsonStr}\n\ndata: ${jsonStr}\n\n`;
     for (const client of this.sseClients) {
       try {
         client.write(payload);
@@ -381,20 +383,39 @@ export class DownloadManager {
       const child = spawn(ytDlpStatus, args);
       task.childProcess = child;
 
-      let lastPercent = 0;
+      let lastReportedPercent = 5;
+      let isAudioStream = false;
 
-      child.stdout.on('data', (data) => {
+      const parseOutput = (data: Buffer) => {
         const text = data.toString();
-        // Parse yt-dlp progress: "[download]  45.2% of ~ 15.20MiB at 3.12MiB/s ETA 00:03"
+
+        if (text.includes('[Merger]') || text.includes('[ExtractAudio]') || text.includes('Deleting original file')) {
+          this.updateTaskProgress(taskId, {
+            status: 'processing',
+            progressPercentage: 95,
+          });
+          return;
+        }
+
+        if (text.includes('Destination:') && (text.includes('.f251.') || text.includes('.f140.') || text.includes('audio'))) {
+          isAudioStream = true;
+        }
+
         const percentMatch = text.match(/\[download\]\s+([\d.]+)%/);
         const sizeMatch = text.match(/of\s+(?:~\s*)?([\d.]+\s*[KMGT]?i?B)/i);
         const speedMatch = text.match(/at\s+([\d.]+\s*[KMGT]?i?B\/s)/i);
         const etaMatch = text.match(/ETA\s+(\d{2}:\d{2}(?::\d{2})?)/);
 
         if (percentMatch) {
-          const percent = parseFloat(percentMatch[1]);
-          if (!isNaN(percent) && percent >= lastPercent) {
-            lastPercent = percent;
+          const rawPercent = parseFloat(percentMatch[1]);
+          if (!isNaN(rawPercent)) {
+            const mappedPercent = isAudioStream
+              ? 85 + Math.round((rawPercent / 100) * 9)
+              : 5 + Math.round((rawPercent / 100) * 80);
+
+            if (mappedPercent >= lastReportedPercent) {
+              lastReportedPercent = mappedPercent;
+            }
 
             let etaSecs = 0;
             if (etaMatch) {
@@ -414,19 +435,33 @@ export class DownloadManager {
               if (!isNaN(num)) speedBytes = Math.round(num * multiplier);
             }
 
+            let totalBytes = task.progress.totalBytes || 0;
+            if (sizeMatch) {
+              const sizeStr = sizeMatch[1].trim();
+              let multiplier = 1;
+              if (/k/i.test(sizeStr)) multiplier = 1024;
+              else if (/m/i.test(sizeStr)) multiplier = 1024 * 1024;
+              else if (/g/i.test(sizeStr)) multiplier = 1024 * 1024 * 1024;
+              const num = parseFloat(sizeStr);
+              if (!isNaN(num)) totalBytes = Math.max(totalBytes, Math.round(num * multiplier));
+            }
+
+            const downloadedBytes = totalBytes > 0 ? Math.round((lastReportedPercent / 100) * totalBytes) : 0;
+
             this.updateTaskProgress(taskId, {
               status: 'downloading',
-              progressPercentage: Math.min(99, Math.round(percent * 10) / 10),
+              progressPercentage: Math.min(99, lastReportedPercent),
+              downloadedBytes,
+              totalBytes: totalBytes > 0 ? totalBytes : undefined,
               speedBytesPerSecond: speedBytes,
               etaSeconds: etaSecs,
             });
           }
         }
-      });
+      };
 
-      child.stderr.on('data', (data) => {
-        console.warn(`[yt-dlp stderr] ${data.toString().trim()}`);
-      });
+      child.stdout.on('data', parseOutput);
+      child.stderr.on('data', parseOutput);
 
       child.on('error', (err) => {
         reject(err);
