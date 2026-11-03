@@ -38,7 +38,68 @@ export default async function handler(req: any, res: any) {
   const url = rawUrl.trim();
 
   try {
-    // 2. YouTube Handler
+    // 2. Direct Media File Handler (.mp4, .webm, .mp3, etc.)
+    const isDirectMedia = /\.(mp4|mkv|webm|mov|avi|mp3|wav|ogg|m4a|flac|aac)(?:[?#]|$)/i.test(url);
+    if (isDirectMedia) {
+      let cleanTitle = 'Direct Media';
+      let ext = 'mp4';
+      try {
+        const parsed = new URL(url);
+        const rawName = parsed.pathname.split('/').pop() || 'media.mp4';
+        ext = (rawName.split('.').pop() || 'mp4').toLowerCase();
+        cleanTitle = decodeURIComponent(rawName)
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[-_]/g, ' ')
+          .trim();
+      } catch {}
+
+      const isAudio = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext);
+
+      return res.status(200).json({
+        id: `direct_${Date.now()}`,
+        url,
+        title: cleanTitle || 'Direct Media Stream',
+        description: `Direct media stream from ${new URL(url).hostname}`,
+        thumbnail: isAudio
+          ? 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800&auto=format&fit=crop&q=80',
+        platform: 'generic',
+        mediaType: isAudio ? 'audio' : 'video',
+        sourceUrl: url,
+        duration: 0,
+        formats: isAudio
+          ? [
+              {
+                formatId: 'best_audio',
+                extension: ext,
+                resolution: 'Lossless / Original Audio',
+                qualityLabel: ext.toUpperCase(),
+                hasVideo: false,
+                hasAudio: true,
+              },
+            ]
+          : [
+              {
+                formatId: 'best',
+                extension: ext,
+                resolution: 'Original Quality (Direct Stream)',
+                qualityLabel: 'Original',
+                hasVideo: true,
+                hasAudio: true,
+              },
+              {
+                formatId: 'audio_only',
+                extension: 'mp3',
+                resolution: 'Audio Stream (MP3)',
+                qualityLabel: 'Audio',
+                hasVideo: false,
+                hasAudio: true,
+              },
+            ],
+      });
+    }
+
+    // 3. YouTube Handler
     const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/|live\/))([\w-]{11})/i);
     if (ytMatch && ytMatch[1]) {
       const videoId = ytMatch[1];
@@ -48,9 +109,10 @@ export default async function handler(req: any, res: any) {
       let thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
       try {
-        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
-          signal: AbortSignal.timeout(6000),
-        });
+        const oembedRes = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+          { signal: AbortSignal.timeout(6000) }
+        );
         if (oembedRes.ok) {
           const oembed: any = await oembedRes.json();
           if (oembed.title) title = oembed.title;
@@ -78,15 +140,43 @@ export default async function handler(req: any, res: any) {
           avatar: thumbnail,
         },
         formats: [
-          { formatId: 'best', extension: 'mp4', resolution: 'Best Available (Up to 4K / 1080p)', qualityLabel: 'Original', hasVideo: true, hasAudio: true },
-          { formatId: '1080p', extension: 'mp4', resolution: '1080p Full HD (60fps)', qualityLabel: '1080p', hasVideo: true, hasAudio: true },
-          { formatId: '720p', extension: 'mp4', resolution: '720p HD (Fast)', qualityLabel: '720p', hasVideo: true, hasAudio: true },
-          { formatId: 'audio_only', extension: 'mp3', resolution: 'Audio Extraction (MP3 320k)', qualityLabel: 'Audio', hasVideo: false, hasAudio: true },
+          {
+            formatId: 'best',
+            extension: 'mp4',
+            resolution: 'Best Available (Up to 4K / 1080p)',
+            qualityLabel: 'Original',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: '1080p',
+            extension: 'mp4',
+            resolution: '1080p Full HD (60fps)',
+            qualityLabel: '1080p',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: '720p',
+            extension: 'mp4',
+            resolution: '720p HD (Fast)',
+            qualityLabel: '720p',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: 'audio_only',
+            extension: 'mp3',
+            resolution: 'Audio Extraction (MP3 320k)',
+            qualityLabel: 'Audio',
+            hasVideo: false,
+            hasAudio: true,
+          },
         ],
       });
     }
 
-    // 3. TikTok Handler
+    // 4. TikTok Handler
     if (url.includes('tiktok.com')) {
       let title = 'TikTok Video';
       let authorName = 'TikTok Creator';
@@ -119,13 +209,27 @@ export default async function handler(req: any, res: any) {
           name: authorName,
         },
         formats: [
-          { formatId: 'best', extension: 'mp4', resolution: 'HD (No Watermark)', qualityLabel: 'Original', hasVideo: true, hasAudio: true },
-          { formatId: 'audio_only', extension: 'mp3', resolution: 'Sound / Music (MP3)', qualityLabel: 'Audio', hasVideo: false, hasAudio: true },
+          {
+            formatId: 'best',
+            extension: 'mp4',
+            resolution: 'HD (No Watermark)',
+            qualityLabel: 'Original',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: 'audio_only',
+            extension: 'mp3',
+            resolution: 'Sound / Music (MP3)',
+            qualityLabel: 'Audio',
+            hasVideo: false,
+            hasAudio: true,
+          },
         ],
       });
     }
 
-    // 4. Vimeo Handler
+    // 5. Vimeo Handler
     if (url.includes('vimeo.com')) {
       try {
         const oembedRes = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`, {
@@ -144,8 +248,22 @@ export default async function handler(req: any, res: any) {
             duration: oembed.duration || 0,
             author: { name: oembed.author_name || 'Vimeo Creator' },
             formats: [
-              { formatId: 'best', extension: 'mp4', resolution: 'Highest Quality', qualityLabel: 'Original', hasVideo: true, hasAudio: true },
-              { formatId: 'audio_only', extension: 'mp3', resolution: 'Audio Only (MP3)', qualityLabel: 'Audio', hasVideo: false, hasAudio: true },
+              {
+                formatId: 'best',
+                extension: 'mp4',
+                resolution: 'Highest Quality',
+                qualityLabel: 'Original',
+                hasVideo: true,
+                hasAudio: true,
+              },
+              {
+                formatId: 'audio_only',
+                extension: 'mp3',
+                resolution: 'Audio Only (MP3)',
+                qualityLabel: 'Audio',
+                hasVideo: false,
+                hasAudio: true,
+              },
             ],
           });
         }
@@ -154,20 +272,22 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 5. OpenGraph HTML Scraper for Instagram, Twitter/X, Facebook, Reddit, & Generic
+    // 6. OpenGraph & HTML Scraper for Social Media & Webpages
     const pageRes = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (pageRes.ok) {
       const html = await pageRes.text();
       const getMeta = (prop: string) => {
-        const m = html.match(new RegExp(`<meta[^>]*(?:property|name)=["'](?:og:|twitter:)?${prop}["'][^>]*content=["']([^"']*)["']`, 'i')) ||
-                  html.match(new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["'](?:og:|twitter:)?${prop}["']`, 'i'));
+        const m =
+          html.match(new RegExp(`<meta[^>]*(?:property|name)=["'](?:og:|twitter:)?${prop}["'][^>]*content=["']([^"']*)["']`, 'i')) ||
+          html.match(new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["'](?:og:|twitter:)?${prop}["']`, 'i'));
         return m ? m[1] : '';
       };
 
@@ -175,6 +295,7 @@ export default async function handler(req: any, res: any) {
       const title = getMeta('title') || (titleMatch ? titleMatch[1].trim() : 'Media File');
       const thumbnail = getMeta('image');
       const description = getMeta('description');
+      const videoSrc = getMeta('video') || getMeta('video:secure_url');
 
       let platform: any = 'generic';
       if (url.includes('instagram.com')) platform = 'instagram';
@@ -188,15 +309,38 @@ export default async function handler(req: any, res: any) {
         url,
         title,
         description,
-        thumbnail: thumbnail || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+        thumbnail:
+          thumbnail ||
+          'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
         platform,
         mediaType: 'video',
-        sourceUrl: url,
+        sourceUrl: videoSrc || url,
         duration: 0,
         formats: [
-          { formatId: 'best', extension: 'mp4', resolution: 'Best Available Quality', qualityLabel: 'Original', hasVideo: true, hasAudio: true },
-          { formatId: '720p', extension: 'mp4', resolution: 'Standard (720p)', qualityLabel: '720p', hasVideo: true, hasAudio: true },
-          { formatId: 'audio_only', extension: 'mp3', resolution: 'Audio Only (MP3)', qualityLabel: 'Audio', hasVideo: false, hasAudio: true },
+          {
+            formatId: 'best',
+            extension: 'mp4',
+            resolution: 'Best Available Quality',
+            qualityLabel: 'Original',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: '720p',
+            extension: 'mp4',
+            resolution: 'Standard (720p)',
+            qualityLabel: '720p',
+            hasVideo: true,
+            hasAudio: true,
+          },
+          {
+            formatId: 'audio_only',
+            extension: 'mp3',
+            resolution: 'Audio Only (MP3)',
+            qualityLabel: 'Audio',
+            hasVideo: false,
+            hasAudio: true,
+          },
         ],
       });
     }

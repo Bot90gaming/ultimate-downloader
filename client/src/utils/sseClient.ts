@@ -100,7 +100,7 @@ class SseProgressManager {
           speedBytesPerSecond: 0,
           etaSeconds: 0,
           fileName,
-          downloadUrl: `/api/downloads/${fileName}`,
+          downloadUrl: `/api/files/${taskId}?name=${encodeURIComponent(fileName)}`,
           timestamp: Date.now(),
         });
         return;

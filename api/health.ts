@@ -24,10 +24,12 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).json({
     status: 'ok',
+    version: '1.0.0',
+    uptime: Math.round(process.uptime ? process.uptime() : 3600),
     timestamp: new Date().toISOString(),
     hasYtDlp: false,
     hasFfmpeg: false,
     serverless: true,
-    message: 'Ultimate Downloader Vercel Gateway Active',
+    message: 'Ultimate Downloader Serverless Engine Active',
   });
 }

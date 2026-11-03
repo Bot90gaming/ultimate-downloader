@@ -12,21 +12,20 @@ let isBackendOnline = false;
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    const custom = localStorage.getItem('ultimate_downloader_backend_url');
-    if (custom && custom.trim()) {
-      return custom.trim().replace(/\/+$/, '');
-    }
+    // Prevent client-side backend URL tampering - managed at infrastructure level
+    try {
+      localStorage.removeItem('ultimate_downloader_backend_url');
+    } catch {}
   }
   return ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 }
 
-export function setApiBaseUrl(url: string): void {
+export function setApiBaseUrl(_url: string): void {
+  // Backend URL is locked and managed serverlessly via /api gateway
   if (typeof window !== 'undefined') {
-    if (url && url.trim()) {
-      localStorage.setItem('ultimate_downloader_backend_url', url.trim().replace(/\/+$/, ''));
-    } else {
+    try {
       localStorage.removeItem('ultimate_downloader_backend_url');
-    }
+    } catch {}
   }
 }
 

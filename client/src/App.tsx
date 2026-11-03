@@ -46,7 +46,6 @@ const DEFAULT_SETTINGS: UserSettings = {
   theme: 'light',
   notificationsEnabled: true,
   downloadsDirectory: '~/Downloads/UltimateDownloader',
-  backendUrl: typeof window !== 'undefined' ? localStorage.getItem('ultimate_downloader_backend_url') || '' : '',
 };
 
 export function App() {
@@ -354,7 +353,6 @@ export function App() {
       }
     } catch (err: any) {
       showToast('error', 'Download Error', err.message || 'Failed to initialize download worker.');
-      setIsSettingsOpen(true);
     }
   };
 
@@ -387,7 +385,6 @@ export function App() {
       setActiveTab('single'); // Switch to main screen to view download manager
     } catch (err: any) {
       showToast('error', 'Batch Failed', err.message || 'Failed to process batch items.');
-      setIsSettingsOpen(true);
     }
   };
 
@@ -442,15 +439,10 @@ export function App() {
   const handleSaveSettings = (newSettings: UserSettings) => {
     setSettings(newSettings);
     setTheme(newSettings.theme);
-    setApiBaseUrl(newSettings.backendUrl || '');
     localStorage.setItem('ultimate_downloader_settings', JSON.stringify(newSettings));
+    showToast('success', 'Preferences Saved', 'Your settings have been updated.');
     checkBackendHealth().then((health) => {
       setIsBackendOnline(!!health);
-      if (health) {
-        showToast('success', 'Backend Connected', `Connected to backend engine successfully.`);
-      } else {
-        showToast('success', 'Preferences Saved', 'Your settings have been updated.');
-      }
     });
   };
 
