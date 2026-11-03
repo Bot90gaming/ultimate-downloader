@@ -67,7 +67,7 @@ export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
       const errJson = await res.json().catch(() => ({}));
       if (res.status === 405) {
         lastError = new Error(
-          'Backend not connected (HTTP 405). Vercel only hosts the static frontend. Please open Settings and enter your Backend Server URL (e.g. Cloudflare tunnel or your server IP).'
+          'Backend not connected (HTTP 405). Vercel only hosts the static frontend. Please open Settings and enter your Backend Server URL (e.g. http://localhost:4000 or your custom server URL).'
         );
       } else {
         lastError = new Error(errJson.error || `HTTP ${res.status}: Failed to extract media info`);
@@ -109,7 +109,7 @@ export async function requestDownload(payload: DownloadRequest): Promise<{ taskI
     if (res.status === 405 || res.status === 503) {
       throw new Error(
         errJson.error ||
-          'Video downloads require an active backend engine (FFmpeg & yt-dlp). Please connect your backend server URL in Settings (e.g., Cloudflare tunnel or your server IP).'
+          'Video downloads require an active backend engine (FFmpeg & yt-dlp). Please connect your backend server URL in Settings (e.g., http://localhost:4000 or your custom server URL).'
       );
     }
     throw new Error(errJson.error || `Failed to start download (${res.status})`);

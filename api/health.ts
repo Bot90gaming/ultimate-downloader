@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const backendUrl = process.env.BACKEND_URL || 'https://forty-active-kay-retrieval.trycloudflare.com';
+  const backendUrl = process.env.BACKEND_URL;
   if (backendUrl) {
     try {
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/health`, {

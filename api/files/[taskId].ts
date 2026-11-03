@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Missing taskId parameter' });
   }
 
-  const backendUrl = process.env.BACKEND_URL || 'https://forty-active-kay-retrieval.trycloudflare.com';
+  const backendUrl = process.env.BACKEND_URL;
   if (!backendUrl) {
     return res.status(503).json({ error: 'Backend engine not configured.' });
   }

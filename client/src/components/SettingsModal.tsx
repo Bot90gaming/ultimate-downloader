@@ -109,13 +109,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2.5">
-              Connect to your backend engine (e.g. Cloudflare tunnel, Ngrok, or local URL) to transcode 4K media with FFmpeg.
+              Connect to your backend engine (e.g. local backend URL or custom server) to transcode 4K media with FFmpeg.
             </p>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="http://localhost:4000 or https://xxx.trycloudflare.com"
+                placeholder="http://localhost:4000 or https://your-server.com"
                 value={form.backendUrl || ''}
                 onChange={(e) => {
                   setForm({ ...form, backendUrl: e.target.value });

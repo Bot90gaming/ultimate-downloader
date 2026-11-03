@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const backendUrl = process.env.BACKEND_URL || 'https://forty-active-kay-retrieval.trycloudflare.com';
+  const backendUrl = process.env.BACKEND_URL;
   if (backendUrl) {
     try {
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/download`, {
@@ -33,6 +33,6 @@ export default async function handler(req: any, res: any) {
 
   return res.status(503).json({
     error:
-      'Video downloads require an active backend engine (FFmpeg & yt-dlp). Vercel only hosts the web frontend. Please connect your running backend in App Settings (e.g., Cloudflare tunnel or your server URL) to start downloading.',
+      'Video downloads require an active backend engine (FFmpeg & yt-dlp). Vercel hosts the web frontend. Please connect your running backend in App Settings (e.g., http://localhost:4000 or your custom server URL) to start downloading.',
   });
 }
