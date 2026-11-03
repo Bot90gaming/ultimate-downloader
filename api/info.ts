@@ -14,7 +14,7 @@ export default async function handler(req: any, res: any) {
   }
 
   // 1. If BACKEND_URL is set or active tunnel is available, proxy directly
-  const backendUrl = process.env.BACKEND_URL || 'https://carefully-expectations-people-tamil.trycloudflare.com';
+  const backendUrl = process.env.BACKEND_URL || 'https://forty-active-kay-retrieval.trycloudflare.com';
   if (backendUrl) {
     try {
       const response = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/info`, {
