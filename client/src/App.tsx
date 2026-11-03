@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   defaultFormat: 'best',
   autoDownload: false,
   maxConcurrentDownloads: 3,
-  theme: 'dark',
+  theme: 'light',
   notificationsEnabled: true,
   downloadsDirectory: '~/Downloads/UltimateDownloader',
   backendUrl: typeof window !== 'undefined' ? localStorage.getItem('ultimate_downloader_backend_url') || '' : '',
@@ -76,7 +76,7 @@ export function App() {
       return DEFAULT_SETTINGS;
     }
   });
-  const [theme, setTheme] = useState<'dark' | 'light'>(settings.theme || 'dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>(settings.theme || 'light');
 
   // System & Backend Status
   const [isBackendOnline, setIsBackendOnline] = useState<boolean>(false);
@@ -465,7 +465,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 transition-colors selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors selection:bg-indigo-500/20 selection:text-indigo-700 dark:selection:text-indigo-200 overflow-x-hidden">
       {/* Sticky Floating Navigation */}
       <Navbar
         activeTab={activeTab}

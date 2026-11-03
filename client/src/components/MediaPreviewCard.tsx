@@ -11,6 +11,7 @@ import {
   ChevronDown,
   User,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { MediaMetadata, MediaFormat, DownloadRequest } from '../../../shared/types';
 import { BrandIcon } from './BrandIcons';
@@ -29,6 +30,9 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
   onClose,
   isStartingDownload,
 }) => {
+  // Mode: 'video' | 'audio'
+  const [mediaMode, setMediaMode] = useState<'video' | 'audio'>('video');
+
   // Format selector
   const [selectedFormatId, setSelectedFormatId] = useState<string>(
     metadata.formats[0]?.formatId || 'best'
@@ -48,16 +52,18 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
   // Dropdown open state
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
-  // Auto-switch to audio format if audioOnly toggled
+  // Sync mode with audioOnly
   useEffect(() => {
-    if (audioOnly) {
+    if (mediaMode === 'audio') {
+      setAudioOnly(true);
       const audioFmt = metadata.formats.find((f) => !f.hasVideo && f.hasAudio);
       if (audioFmt) setSelectedFormatId(audioFmt.formatId);
     } else {
-      const videoFmt = metadata.formats.find((f) => f.hasVideo);
+      setAudioOnly(false);
+      const videoFmt = metadata.formats.find((f) => f.hasVideo) || metadata.formats[0];
       if (videoFmt) setSelectedFormatId(videoFmt.formatId);
     }
-  }, [audioOnly, metadata.formats]);
+  }, [mediaMode, metadata.formats]);
 
   const activeFormat: MediaFormat | undefined =
     metadata.formats.find((f) => f.formatId === selectedFormatId) || metadata.formats[0];
@@ -76,30 +82,34 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
     onStartDownload(req);
   };
 
+  // Video formats vs Audio formats
+  const videoFormats = metadata.formats.filter((f) => f.hasVideo);
+  const audioFormats = metadata.formats.filter((f) => !f.hasVideo && f.hasAudio);
+
   return (
-    <div className="w-full max-w-4xl mx-auto my-6 p-5 sm:p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur-xl transition-all duration-300">
-      {/* Top Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-5">
+    <div className="w-full max-w-4xl mx-auto my-6 p-4 sm:p-6 rounded-2xl bg-white dark:bg-surface-800 border border-slate-200/90 dark:border-white/10 shadow-soft-xl backdrop-blur-xl transition-all duration-300 animate-fade-up">
+      {/* Top Header Row */}
+      <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/80 dark:border-white/5 mb-5">
         <div className="flex items-center gap-2">
           <BrandIcon platform={metadata.platform} size={20} />
-          <span className="text-xs uppercase font-bold tracking-wider text-slate-400">
+          <span className="text-xs uppercase font-bold tracking-wider text-slate-700 dark:text-slate-300">
             {metadata.platform} Media Found
           </span>
-          <span className="text-slate-600">•</span>
-          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-slate-300 dark:text-slate-700">•</span>
+          <span className="text-xs font-semibold text-accent-green bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse" />
             Ready for extraction
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <a
             href={metadata.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
             title="Open original link"
             aria-label="Open original link"
-            className="min-h-[44px] px-3 rounded-lg text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="min-h-[38px] px-3 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-surface-700 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <span className="hidden sm:inline">Source</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -108,7 +118,7 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
             <button
               onClick={onClose}
               aria-label="Close preview"
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 rounded-lg cursor-pointer transition-colors"
+              className="w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-surface-700 rounded-lg cursor-pointer transition-colors"
             >
               <Check className="w-4 h-4" />
             </button>
@@ -116,270 +126,299 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
         </div>
       </div>
 
-      {/* Media Details Layout: Thumbnail Left + Config Right */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* Left: Thumbnail & Badges */}
+      {/* Main Grid: Left Thumbnail + Right Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 items-start">
+        {/* Left: Thumbnail & Creator Meta */}
         <div className="md:col-span-5 relative group">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shadow-md">
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-surface-900 border border-slate-200/80 dark:border-white/5 shadow-soft-sm">
             <img
-              src={metadata.thumbnail || (metadata.platform === 'youtube' && metadata.id ? `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg` : '')}
+              src={
+                metadata.thumbnail ||
+                (metadata.platform === 'youtube' && metadata.id
+                  ? `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg`
+                  : '')
+              }
               alt={metadata.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                if (metadata.platform === 'youtube' && metadata.id && !target.src.includes('hqdefault.jpg')) {
+                if (
+                  metadata.platform === 'youtube' &&
+                  metadata.id &&
+                  !target.src.includes('hqdefault.jpg')
+                ) {
                   target.src = `https://i.ytimg.com/vi/${metadata.id}/hqdefault.jpg`;
                 }
               }}
               loading="lazy"
             />
-            {/* Ambient vignette */}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+            {/* Vignette */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
             {/* Duration badge */}
             {metadata.durationFormatted && (
-              <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-slate-950/90 text-white text-xs font-mono font-medium flex items-center gap-1 border border-slate-800">
-                <Clock className="w-3 h-3 text-indigo-400" />
+              <div className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-sm text-white text-xs font-mono font-medium flex items-center gap-1 border border-white/10 shadow-sm">
+                <Clock className="w-3 h-3 text-brand-400" />
                 <span>{metadata.durationFormatted}</span>
               </div>
             )}
 
             {/* Platform badge overlay */}
-            <div className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-slate-950/90 border border-slate-800">
+            <div className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-black/80 backdrop-blur-sm border border-white/10 shadow-sm">
               <BrandIcon platform={metadata.platform} size={16} />
             </div>
           </div>
 
           {/* Author info & metrics */}
-          <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-2 min-w-0">
               {metadata.author?.avatar ? (
                 <img
                   src={metadata.author.avatar}
                   alt={metadata.author.name}
-                  className="w-6 h-6 rounded-full object-cover border border-slate-700"
+                  className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-surface-600"
                 />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
+                <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-surface-700 flex items-center justify-center text-slate-600 dark:text-slate-300">
                   <User className="w-3.5 h-3.5" />
                 </div>
               )}
-              <span className="font-medium text-slate-200 truncate max-w-[150px]">
+              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[150px]">
                 {metadata.author?.name || 'Creator'}
               </span>
             </div>
 
             {metadata.viewCount !== undefined && (
-              <div className="flex items-center gap-1 text-slate-400 shrink-0">
-                <Eye className="w-3.5 h-3.5 text-slate-500" />
-                <span>{formatCompactNumber(metadata.viewCount)} views</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-medium">{formatCompactNumber(metadata.viewCount)} views</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right: Controls & Download Options */}
+        {/* Right: Format, Quality & Trimmer Controls */}
         <div className="md:col-span-7 flex flex-col gap-4">
           {/* Title */}
-          <h3 className="font-display font-bold text-lg text-white leading-snug line-clamp-2">
+          <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-snug line-clamp-2">
             {metadata.title}
           </h3>
 
-          {/* Format / Quality Selector Dropdown */}
-          <div className="relative">
-            <label className="block text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1.5">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Select Resolution & Encoding</span>
-            </label>
+          {/* Mode Pill Switch: Video vs Audio (from Design Guide Section 5.5) */}
+          <div className="flex items-center p-1 bg-slate-100 dark:bg-surface-700/80 rounded-xl border border-slate-200/80 dark:border-white/5">
+            <button
+              type="button"
+              onClick={() => setMediaMode('video')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
+                mediaMode === 'video'
+                  ? 'bg-white dark:bg-surface-800 text-brand-600 dark:text-white shadow-soft-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Video className="w-4 h-4 text-brand-500" />
+              <span>Video (MP4)</span>
+            </button>
 
             <button
               type="button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 hover:border-slate-600 flex items-center justify-between text-sm text-left cursor-pointer transition-colors"
+              onClick={() => setMediaMode('audio')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer ${
+                mediaMode === 'audio'
+                  ? 'bg-white dark:bg-surface-800 text-accent-purple dark:text-white shadow-soft-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                {audioOnly ? (
-                  <Music className="w-4 h-4 text-amber-400 shrink-0" />
-                ) : (
-                  <Video className="w-4 h-4 text-cyan-400 shrink-0" />
-                )}
-                <span className="font-semibold text-white truncate">
-                  {activeFormat?.resolution || 'Original Quality'}
-                </span>
-                <span className="text-xs text-slate-400 uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800">
-                  {activeFormat?.extension || 'mp4'}
-                </span>
-                {activeFormat?.fileSizeFormatted && (
-                  <span className="text-xs text-indigo-300 font-medium">
-                    ({activeFormat.fileSizeFormatted})
-                  </span>
-                )}
-              </div>
-              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              <Music className="w-4 h-4 text-accent-purple" />
+              <span>Audio Only (MP3)</span>
             </button>
+          </div>
 
-            {/* Dropdown Menu */}
-            {isDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 z-30 p-1.5 rounded-xl bg-slate-950 border border-slate-700 shadow-2xl max-h-56 overflow-y-auto">
-                {metadata.formats.map((fmt) => (
-                  <button
-                    key={fmt.formatId}
-                    type="button"
-                    onClick={() => {
-                      setSelectedFormatId(fmt.formatId);
-                      setIsDropdownOpen(false);
-                      if (!fmt.hasVideo && fmt.hasAudio) {
-                        setAudioOnly(true);
-                      }
-                    }}
-                    className={`w-full min-h-[44px] px-3 py-2 rounded-lg text-xs sm:text-sm flex items-center justify-between transition-colors cursor-pointer ${
-                      selectedFormatId === fmt.formatId
-                        ? 'bg-indigo-600/20 text-indigo-200 font-semibold'
-                        : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {fmt.hasVideo ? (
-                        <Video className="w-4 h-4 text-cyan-400" />
-                      ) : (
-                        <Music className="w-4 h-4 text-amber-400" />
-                      )}
-                      <span>{fmt.resolution || fmt.qualityLabel || 'Stream'}</span>
-                      <span className="text-[11px] font-mono uppercase text-slate-400">
-                        .{fmt.extension}
-                      </span>
-                    </div>
+          {/* Quality Grid Selector (Design Guide Section 5.5) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-brand-500" />
+                <span>Choose Resolution / Bitrate</span>
+              </span>
+              <span className="text-[11px] font-mono text-slate-400 uppercase">
+                {activeFormat?.extension || 'mp4'}
+              </span>
+            </label>
 
-                    <div className="flex items-center gap-2">
-                      {fmt.fileSizeFormatted && (
-                        <span className="text-xs text-slate-400 font-mono">
-                          {fmt.fileSizeFormatted}
+            {/* Quick Quality Cards (Grid) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(mediaMode === 'video' ? videoFormats : audioFormats)
+                .slice(0, 6)
+                .map((fmt) => {
+                  const isSelected = selectedFormatId === fmt.formatId;
+                  return (
+                    <button
+                      key={fmt.formatId}
+                      type="button"
+                      onClick={() => setSelectedFormatId(fmt.formatId)}
+                      className={`group p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                        isSelected
+                          ? 'bg-brand-50/80 border-brand-500 dark:bg-brand-500/20 dark:border-brand-500 shadow-soft-xs ring-1 ring-brand-500/30'
+                          : 'bg-white dark:bg-surface-700/60 border-slate-200/80 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-surface-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-xs font-bold ${
+                            isSelected
+                              ? 'text-brand-700 dark:text-brand-300'
+                              : 'text-slate-800 dark:text-white'
+                          }`}
+                        >
+                          {fmt.resolution || fmt.qualityLabel || 'Stream'}
                         </span>
-                      )}
-                      {selectedFormatId === fmt.formatId && (
-                        <Check className="w-4 h-4 text-indigo-400" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />}
+                      </div>
+                      <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        <span>.{fmt.extension}</span>
+                        <span>{fmt.fileSizeFormatted || 'Adaptive'}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Dropdown if more than 6 formats exist */}
+            {metadata.formats.length > 6 && (
+              <div className="relative pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-surface-700/60 border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <span className="font-medium">
+                    More streams ({metadata.formats.length} total)
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${
+                      isDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-30 p-1.5 rounded-xl bg-white dark:bg-surface-800 border border-slate-200 dark:border-white/10 shadow-soft-xl max-h-48 overflow-y-auto">
+                    {metadata.formats.map((fmt) => (
+                      <button
+                        key={fmt.formatId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFormatId(fmt.formatId);
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`w-full px-3 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          selectedFormatId === fmt.formatId
+                            ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/20 dark:text-white font-bold'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-surface-700'
+                        }`}
+                      >
+                        <span className="font-semibold">
+                          {fmt.resolution || fmt.qualityLabel} (.{fmt.extension})
+                        </span>
+                        <span className="font-mono text-slate-500 text-[11px]">
+                          {fmt.fileSizeFormatted || 'Adaptive'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Quick Option Switches: Audio Only & Video Trimmer */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-            {/* Audio Only Toggle Button */}
-            <button
-              type="button"
-              onClick={() => setAudioOnly(!audioOnly)}
-              aria-label="Toggle Audio Only"
-              className={`min-h-[44px] px-3.5 py-2 rounded-xl border text-xs font-medium flex items-center justify-between cursor-pointer transition-all duration-200 select-none ${
-                audioOnly
-                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Music className="w-4 h-4 text-amber-400" />
-                <span>Audio Only (MP3 320k)</span>
-              </div>
-              <div
-                className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ${
-                  audioOnly ? 'bg-amber-500' : 'bg-slate-800'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                    audioOnly ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </div>
-            </button>
-
+          {/* Quick Option Switches: Trimmer & Custom Name */}
+          <div className="pt-1 space-y-2.5">
             {/* Trim Media Toggle Button */}
             <button
               type="button"
               onClick={() => setEnableTrim(!enableTrim)}
               aria-label="Toggle Media Trimmer"
-              className={`min-h-[44px] px-3.5 py-2 rounded-xl border text-xs font-medium flex items-center justify-between cursor-pointer transition-all duration-200 select-none ${
+              className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all duration-200 select-none ${
                 enableTrim
-                  ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-300'
-                  : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  ? 'bg-brand-50 border-brand-300 text-brand-800 dark:bg-brand-500/15 dark:border-brand-500/40 dark:text-brand-300 shadow-soft-xs'
+                  : 'bg-slate-50 dark:bg-surface-700/40 border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-indigo-400" />
-                <span>Trim Video Clip</span>
+                <Scissors className="w-4 h-4 text-brand-500" />
+                <span>Trim Video Clip / Audio Segment</span>
               </div>
               <div
-                className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ${
-                  enableTrim ? 'bg-indigo-500' : 'bg-slate-800'
+                className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-200 ${
+                  enableTrim ? 'bg-brand-500' : 'bg-slate-300 dark:bg-surface-600'
                 }`}
               >
                 <div
-                  className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                    enableTrim ? 'translate-x-4' : 'translate-x-0'
+                  className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    enableTrim ? 'translate-x-3.5' : 'translate-x-0'
                   }`}
                 />
               </div>
             </button>
-          </div>
 
-          {/* Expanded Trimmer Inputs */}
-          {enableTrim && (
-            <div className="p-3 rounded-xl bg-slate-950 border border-indigo-500/30 flex flex-col sm:flex-row items-center gap-3 animate-in fade-in duration-200">
-              <div className="flex-1 w-full">
-                <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
-                  Start Point (HH:MM:SS)
-                </label>
-                <input
-                  type="text"
-                  value={trimStart}
-                  onChange={(e) => setTrimStart(e.target.value)}
-                  placeholder="00:00:05"
-                  className="w-full min-h-[44px] px-3 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+            {/* Expanded Trimmer Inputs */}
+            {enableTrim && (
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-surface-900 border border-brand-200/80 dark:border-brand-500/30 flex flex-col sm:flex-row items-center gap-3 animate-fade-in">
+                <div className="flex-1 w-full">
+                  <label className="block text-[11px] font-mono font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">
+                    Start (HH:MM:SS)
+                  </label>
+                  <input
+                    type="text"
+                    value={trimStart}
+                    onChange={(e) => setTrimStart(e.target.value)}
+                    placeholder="00:00:00"
+                    className="w-full min-h-[38px] px-3 rounded-lg bg-white dark:bg-surface-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-brand-500"
+                  />
+                </div>
 
-              <div className="flex-1 w-full">
-                <label className="block text-[11px] font-mono uppercase text-slate-400 mb-1">
-                  End Point (HH:MM:SS)
-                </label>
-                <input
-                  type="text"
-                  value={trimEnd}
-                  onChange={(e) => setTrimEnd(e.target.value)}
-                  placeholder="00:00:30"
-                  className="w-full min-h-[44px] px-3 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
-                />
+                <div className="flex-1 w-full">
+                  <label className="block text-[11px] font-mono font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">
+                    End (HH:MM:SS)
+                  </label>
+                  <input
+                    type="text"
+                    value={trimEnd}
+                    onChange={(e) => setTrimEnd(e.target.value)}
+                    placeholder="00:01:30"
+                    className="w-full min-h-[38px] px-3 rounded-lg bg-white dark:bg-surface-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
+            )}
+
+            {/* Custom filename input */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                Custom File Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={customFilename}
+                onChange={(e) => setCustomFilename(e.target.value)}
+                placeholder="e.g. Favorite_Track_2026"
+                className="w-full min-h-[40px] px-3 rounded-xl bg-slate-50 dark:bg-surface-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-500 font-mono"
+              />
             </div>
-          )}
-
-          {/* Custom filename input */}
-          <div>
-            <label className="block text-[11px] font-medium text-slate-400 mb-1">
-              Custom File Name (Optional)
-            </label>
-            <input
-              type="text"
-              value={customFilename}
-              onChange={(e) => setCustomFilename(e.target.value)}
-              placeholder="e.g. Highlight_Clip_1"
-              className="w-full min-h-[44px] px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
-            />
           </div>
 
-          {/* Primary Action Button */}
+          {/* Primary Action Button (Liquid brand sheen) */}
           <button
             type="button"
             onClick={handleDownload}
             disabled={isStartingDownload}
             aria-label="Start Download"
-            className="w-full min-h-[50px] px-6 rounded-xl bg-gradient-to-r from-brand-600 via-indigo-600 to-accent-cyan hover:from-brand-500 hover:to-cyan-400 text-white font-semibold text-sm sm:text-base shadow-glow flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 mt-1"
+            className="w-full min-h-[48px] px-6 rounded-xl bg-gradient-to-r from-brand-500 via-brand-600 to-accent-indigo hover:from-brand-600 hover:to-accent-purple text-white font-bold text-sm sm:text-base shadow-soft-md hover:shadow-glow-brand flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 mt-1"
           >
             <Download className="w-5 h-5 shrink-0" />
-            <span>Download {audioOnly ? 'Lossless Audio' : activeFormat?.resolution || 'Video'}</span>
+            <span>
+              Download {audioOnly ? 'Lossless Audio (MP3)' : activeFormat?.resolution || 'Video'}
+            </span>
           </button>
         </div>
       </div>

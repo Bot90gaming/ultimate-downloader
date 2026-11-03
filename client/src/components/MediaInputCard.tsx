@@ -46,16 +46,16 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
   const platformInfo = PLATFORMS_INFO[platform];
 
   return (
-    <div className="w-full max-w-4xl mx-auto my-4">
+    <div className="w-full max-w-4xl mx-auto my-4 sm:my-6 animate-fade-up">
       <form onSubmit={handleSubmit} className="relative group">
-        {/* Glow ambient background behind input */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 via-accent-violet to-accent-cyan rounded-2xl blur-md opacity-40 group-hover:opacity-75 transition-all duration-300 -z-10 group-focus-within:opacity-100 group-focus-within:blur-lg" />
+        {/* Animated Glow halo behind input container */}
+        <div className="absolute -inset-1 bg-gradient-to-r from-brand-400 via-accent-indigo to-accent-purple rounded-2xl blur-md opacity-25 group-hover:opacity-45 transition duration-500 -z-10 group-focus-within:opacity-70 group-focus-within:blur-lg" />
 
-        <div className="relative flex flex-col md:flex-row items-stretch gap-2 p-2 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl">
-          {/* Main Input Box */}
-          <div className="relative flex-1 flex items-center min-h-[56px] px-3">
-            <div className="pl-1 pr-3 text-slate-400">
-              <Search className="w-5 h-5 text-indigo-400 shrink-0" />
+        <div className="relative flex flex-col md:flex-row items-stretch gap-2 p-2 sm:p-2.5 rounded-2xl bg-white dark:bg-surface-800 border border-slate-200/90 dark:border-white/10 shadow-soft-xl transition-all duration-300 group-focus-within:border-brand-500/80 group-focus-within:ring-4 group-focus-within:ring-brand-500/10">
+          {/* Main Input Field */}
+          <div className="relative flex-1 flex items-center min-h-[54px] px-3 sm:px-4">
+            <div className="pr-3 text-brand-500 dark:text-brand-400 shrink-0">
+              <Search className="w-5 h-5" />
             </div>
 
             <input
@@ -64,7 +64,7 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
               onChange={(e) => setInputUrl(e.target.value)}
               placeholder="Paste any link: YouTube, TikTok, Instagram, X/Twitter, Reddit, Pinterest..."
               aria-label="Media or webpage link"
-              className="w-full bg-transparent text-slate-100 placeholder-slate-400 text-sm sm:text-base font-normal focus:outline-none pr-8 selection:bg-indigo-500/30"
+              className="w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 font-mono text-xs sm:text-sm md:text-base focus:outline-none pr-8 selection:bg-brand-500/20"
             />
 
             {/* Clear button if has input */}
@@ -73,7 +73,7 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
                 type="button"
                 onClick={handleClear}
                 aria-label="Clear input"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-200 cursor-pointer rounded-lg hover:bg-slate-800 transition-colors"
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-surface-700 transition-colors animate-fade-in shrink-0 mr-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -82,10 +82,10 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
             {/* Platform detection badge */}
             {inputUrl && (
               <div
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${platformInfo.badgeBg} transition-all duration-200 shrink-0 mr-1`}
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${platformInfo.badgeBg} transition-all duration-200 shrink-0 mr-1 animate-slide-down`}
               >
                 <BrandIcon platform={platform} size={15} />
-                <span>{platformInfo.name}</span>
+                <span className="font-semibold">{platformInfo.name}</span>
               </div>
             )}
           </div>
@@ -98,28 +98,28 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
               onClick={handlePaste}
               title="Paste from clipboard"
               aria-label="Paste from clipboard"
-              className="min-h-[48px] px-3.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-slate-600 text-xs sm:text-sm font-medium text-slate-200 hover:text-white flex items-center gap-2 cursor-pointer transition-all duration-200 active:scale-95 shrink-0"
+              className="min-h-[46px] px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 dark:bg-surface-700 dark:hover:bg-surface-600 border border-slate-200 dark:border-white/5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white flex items-center gap-2 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 shrink-0 shadow-soft-xs"
             >
-              <ClipboardPaste className="w-4 h-4 text-indigo-400" />
+              <ClipboardPaste className="w-4 h-4 text-brand-500 dark:text-brand-400" />
               <span className="hidden sm:inline">Paste</span>
             </button>
 
-            {/* Primary Submit CTA */}
+            {/* Primary Submit CTA (Liquid brand sheen) */}
             <button
               type="submit"
               disabled={!inputUrl.trim() || isLoading}
               aria-label="Analyze and Fetch Media"
-              className="min-h-[48px] flex-1 md:flex-none px-6 rounded-xl bg-gradient-to-r from-accent-orange via-orange-500 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white font-semibold text-sm sm:text-base shadow-glow-orange flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shrink-0"
+              className="min-h-[46px] flex-1 md:flex-none px-6 rounded-xl bg-gradient-to-r from-brand-500 via-brand-600 to-accent-indigo hover:from-brand-600 hover:to-accent-purple text-white font-bold text-xs sm:text-sm md:text-base shadow-soft-md hover:shadow-glow-brand flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shrink-0"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Extracting...</span>
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                  <span>Analyzing...</span>
                 </>
               ) : (
                 <>
                   <span>Analyze & Fetch</span>
-                  <ArrowRight className="w-5 h-5" />
+                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                 </>
               )}
             </button>
@@ -127,43 +127,51 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
         </div>
       </form>
 
-      {/* Quick Example Links */}
-      <div className="mt-3 flex flex-wrap items-center justify-between text-xs text-slate-400 px-2 gap-2">
+      {/* Quick Example Demo Links */}
+      <div className="mt-3 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-2 gap-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-accent-cyan" />
-          <span className="font-medium text-slate-300">Try quick demos:</span>
+          <Sparkles className="w-3.5 h-3.5 text-brand-500" />
+          <span className="font-semibold text-slate-700 dark:text-slate-300">Try quick demos:</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setInputUrl(PLATFORMS_INFO.youtube.sampleUrl)}
-            className="hover:text-indigo-300 hover:underline cursor-pointer transition-colors"
+            className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
             YouTube 4K
           </button>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-300 dark:text-slate-700">•</span>
           <button
             type="button"
             onClick={() => setInputUrl(PLATFORMS_INFO.tiktok.sampleUrl)}
-            className="hover:text-indigo-300 hover:underline cursor-pointer transition-colors"
+            className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
             TikTok HD
           </button>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-300 dark:text-slate-700">•</span>
           <button
             type="button"
             onClick={() => setInputUrl(PLATFORMS_INFO.instagram.sampleUrl)}
-            className="hover:text-indigo-300 hover:underline cursor-pointer transition-colors"
+            className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
             Instagram Reel
           </button>
-          <span className="text-slate-600">•</span>
+          <span className="text-slate-300 dark:text-slate-700">•</span>
+          <button
+            type="button"
+            onClick={() => setInputUrl(PLATFORMS_INFO.twitter.sampleUrl)}
+            className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
+          >
+            X / Twitter
+          </button>
+          <span className="text-slate-300 dark:text-slate-700">•</span>
           <button
             type="button"
             onClick={() => setInputUrl(PLATFORMS_INFO.webpage.sampleUrl)}
-            className="hover:text-indigo-300 hover:underline cursor-pointer transition-colors"
+            className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
-            Image Scraper URL
+            Web Gallery
           </button>
         </div>
       </div>

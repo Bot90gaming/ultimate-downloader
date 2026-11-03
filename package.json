@@ -14,7 +14,8 @@
     "build": "npm --prefix server run build && npm --prefix client run build",
     "start": "npm --prefix server run start",
     "test": "node tests/run-tests.js",
-    "test:all": "npm --prefix server test && npm --prefix client test && node tests/run-tests.js",
+    "test:e2e": "node tests/playwright-e2e.js",
+    "test:all": "npm --prefix server test && npm --prefix client test && node tests/run-tests.js && node tests/playwright-e2e.js",
     "cli": "node server/bin/cli.js",
     "electron:start": "npm --prefix electron start",
     "electron:dev": "npm --prefix electron run dev",
@@ -48,6 +49,7 @@
   ],
   "devDependencies": {
     "concurrently": "^9.1.0",
+    "playwright": "^1.64.1",
     "vercel": "^65.9.0"
   }
 }
