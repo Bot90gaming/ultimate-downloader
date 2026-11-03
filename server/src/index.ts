@@ -31,13 +31,48 @@ app.use(
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// Ensure downloads directory exists and serve statically
+// Ensure downloads directory exists
 const downloadsDir = downloadManager.getDownloadsDir();
 if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir, { recursive: true });
 }
-app.use('/downloads', express.static(downloadsDir));
-app.use('/api/downloads', express.static(downloadsDir));
+
+// Download handlers that automatically delete file from server storage once client finishes download
+const handleDownloadFile = (req: Request, res: Response) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(downloadsDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: `File not found or has already been downloaded and purged: ${filename}` });
+    return;
+  }
+
+  const cleanName = filename.replace(/^[0-9a-fA-F-]{36}_/, '');
+
+  res.download(filePath, cleanName, (err) => {
+    if (err) {
+      if (!res.headersSent) {
+        res.status(500).json({ error: `Failed to stream file: ${err.message}` });
+      }
+      return;
+    }
+
+    console.log(`[AutoDelete] Client finished downloading ${filename}. Scheduling storage purge in 10s...`);
+    setTimeout(() => {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`[AutoDelete] Successfully purged storage file: ${filename}`);
+        }
+      } catch (delErr) {
+        console.warn(`[AutoDelete] Failed to delete ${filename}:`, delErr);
+      }
+    }, 10000).unref();
+  });
+};
+
+app.get('/downloads/:filename', handleDownloadFile);
+app.get('/api/downloads/:filename', handleDownloadFile);
 
 // Mount API routes
 app.use('/api', apiRouter);

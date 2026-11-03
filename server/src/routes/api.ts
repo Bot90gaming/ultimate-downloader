@@ -142,10 +142,10 @@ router.get('/tasks/:taskId', (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/tasks/:taskId
+ * DELETE & POST /api/tasks/:taskId/cancel
  * Cancels active download task and cleans up associated files.
  */
-router.delete('/tasks/:taskId', (req: Request, res: Response) => {
+const handleCancelTask = (req: Request, res: Response) => {
   const { taskId } = req.params;
   const deleted = downloadManager.deleteTask(taskId);
 
@@ -155,7 +155,11 @@ router.delete('/tasks/:taskId', (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: `Task ${taskId} cancelled and deleted.` });
-});
+};
+
+router.delete('/tasks/:taskId', handleCancelTask);
+router.post('/tasks/:taskId/cancel', handleCancelTask);
+router.post('/tasks/:taskId/delete', handleCancelTask);
 
 /**
  * GET /api/events
@@ -168,6 +172,7 @@ router.get('/events', (req: Request, res: Response) => {
 /**
  * GET /api/files/:taskId
  * Streams completed media download to the client as an attachment.
+ * Automatically deletes the file from server storage once download finishes.
  */
 router.get('/files/:taskId', (req: Request, res: Response) => {
   const { taskId } = req.params;
@@ -175,15 +180,50 @@ router.get('/files/:taskId', (req: Request, res: Response) => {
 
   if (!fileInfo) {
     res.status(404).json({
-      error: `File for task ${taskId} is not ready or has expired.`,
+      error: `File for task ${taskId} is not ready or has already been downloaded and purged.`,
     });
     return;
   }
 
   res.download(fileInfo.filePath, fileInfo.fileName, (err) => {
-    if (err && !res.headersSent) {
-      res.status(500).json({ error: `Failed to stream file: ${err.message}` });
+    if (err) {
+      if (!res.headersSent) {
+        res.status(500).json({ error: `Failed to stream file: ${err.message}` });
+      }
+      return;
     }
+
+    // Client successfully completed downloading file!
+    console.log(`[AutoDelete] Client finished downloading ${fileInfo.fileName} (Task: ${taskId}). Scheduling storage purge in 10s...`);
+    downloadManager.scheduleFileCleanup(taskId, 10000);
+  });
+});
+
+/**
+ * DELETE /api/files/:taskId
+ * Immediately purges media files for a completed or cancelled task from server storage.
+ */
+router.delete('/files/:taskId', (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const deleted = downloadManager.deleteDownloadedFiles(taskId);
+  res.json({
+    success: true,
+    deleted,
+    message: `Storage files for task ${taskId} purged from server.`,
+  });
+});
+
+/**
+ * POST /api/files/:taskId/delete
+ * Alternative endpoint to immediately purge media files from server storage.
+ */
+router.post('/files/:taskId/delete', (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const deleted = downloadManager.deleteDownloadedFiles(taskId);
+  res.json({
+    success: true,
+    deleted,
+    message: `Storage files for task ${taskId} purged from server.`,
   });
 });
 

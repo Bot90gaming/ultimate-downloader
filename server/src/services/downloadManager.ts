@@ -31,6 +31,8 @@ export class DownloadManager {
   private sseClients: Set<Response> = new Set();
   private downloadsDir: string;
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private cleanupTimers: Map<string, NodeJS.Timeout> = new Map();
+  private ttlCleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.downloadsDir = path.resolve(process.cwd(), '..', 'downloads');
@@ -47,6 +49,8 @@ export class DownloadManager {
     }
 
     this.startHeartbeat();
+    this.sweepOldFiles();
+    this.startTtlCleanup();
   }
 
   public getDownloadsDir(): string {
@@ -680,20 +684,128 @@ export class DownloadManager {
   }
 
   /**
-   * Deletes task record and its downloaded file on disk.
+   * Sweeps and deletes any media files in downloadsDir older than maxAgeMs.
+   */
+  public sweepOldFiles(maxAgeMs: number = 15 * 60 * 1000): void {
+    try {
+      if (!fs.existsSync(this.downloadsDir)) return;
+      const now = Date.now();
+      const files = fs.readdirSync(this.downloadsDir);
+      for (const file of files) {
+        if (file === '.gitkeep') continue;
+        const filePath = path.join(this.downloadsDir, file);
+        try {
+          const stats = fs.statSync(filePath);
+          if (now - stats.mtimeMs > maxAgeMs) {
+            fs.unlinkSync(filePath);
+            console.log(`[DownloadManager TTL] Deleted expired storage file: ${file}`);
+          }
+        } catch {
+          // ignore individual file error
+        }
+      }
+
+      // Clean up lingering finished tasks in memory
+      for (const [taskId, task] of this.tasks.entries()) {
+        const isDone = ['completed', 'error', 'cancelled'].includes(task.progress.status);
+        if (isDone && now - task.progress.timestamp > maxAgeMs) {
+          this.tasks.delete(taskId);
+        }
+      }
+    } catch (err) {
+      console.warn('[DownloadManager TTL] Error during storage sweep:', err);
+    }
+  }
+
+  /**
+   * Starts periodic garbage collection of uncollected files and tasks.
+   */
+  private startTtlCleanup(): void {
+    this.ttlCleanupInterval = setInterval(() => {
+      this.sweepOldFiles(15 * 60 * 1000);
+    }, 2 * 60 * 1000);
+    this.ttlCleanupInterval.unref();
+  }
+
+  /**
+   * Deletes all files on disk associated with a specific task (including raw/temp/final).
+   */
+  public deleteDownloadedFiles(taskId: string): boolean {
+    let deletedAny = false;
+
+    // Clear any pending timer
+    if (this.cleanupTimers.has(taskId)) {
+      clearTimeout(this.cleanupTimers.get(taskId)!);
+      this.cleanupTimers.delete(taskId);
+    }
+
+    try {
+      if (fs.existsSync(this.downloadsDir)) {
+        const files = fs.readdirSync(this.downloadsDir);
+        for (const file of files) {
+          if (file.startsWith(taskId)) {
+            const filePath = path.join(this.downloadsDir, file);
+            try {
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                deletedAny = true;
+                console.log(`[DownloadManager] Successfully deleted storage file: ${file}`);
+              }
+            } catch (err) {
+              console.warn(`[DownloadManager] Failed to unlink ${file}:`, err);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[DownloadManager] Error listing files for taskId ${taskId}:`, err);
+    }
+
+    const task = this.tasks.get(taskId);
+    if (task) {
+      if (task.finalFilePath && fs.existsSync(task.finalFilePath)) {
+        try { fs.unlinkSync(task.finalFilePath); deletedAny = true; } catch {}
+      }
+      if (task.tempFilePath && fs.existsSync(task.tempFilePath)) {
+        try { fs.unlinkSync(task.tempFilePath); deletedAny = true; } catch {}
+      }
+      this.tasks.delete(taskId);
+    }
+
+    return deletedAny;
+  }
+
+  /**
+   * Schedules automatic deletion of a task's files after the user has finished downloading.
+   * Uses a short grace period (default 10s) to allow socket flushing and avoid breaking client range/head requests.
+   */
+  public scheduleFileCleanup(taskId: string, delayMs: number = 10000): void {
+    if (this.cleanupTimers.has(taskId)) {
+      clearTimeout(this.cleanupTimers.get(taskId)!);
+      this.cleanupTimers.delete(taskId);
+    }
+
+    const timer = setTimeout(() => {
+      console.log(`[AutoDelete] Executing scheduled cleanup for task ${taskId}...`);
+      this.cleanupTimers.delete(taskId);
+      this.deleteDownloadedFiles(taskId);
+    }, delayMs);
+
+    timer.unref();
+    this.cleanupTimers.set(taskId, timer);
+  }
+
+  /**
+   * Deletes task record and its downloaded files on disk.
    */
   public deleteTask(taskId: string): boolean {
     const task = this.tasks.get(taskId);
-    if (!task) return false;
-
-    this.cancelTask(taskId);
-
-    if (task.finalFilePath && fs.existsSync(task.finalFilePath)) {
-      try { fs.unlinkSync(task.finalFilePath); } catch {}
+    if (!task) {
+      return this.deleteDownloadedFiles(taskId);
     }
 
-    this.tasks.delete(taskId);
-    return true;
+    this.cancelTask(taskId);
+    return this.deleteDownloadedFiles(taskId);
   }
 
   /**

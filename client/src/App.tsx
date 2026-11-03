@@ -178,6 +178,11 @@ export function App() {
                 document.body.appendChild(triggerLink);
                 triggerLink.click();
                 document.body.removeChild(triggerLink);
+
+                // Secondary safeguard: request server file cleanup 30s after triggering download
+                setTimeout(() => {
+                  fetch(`${base}/api/files/${progress.taskId}`, { method: 'DELETE' }).catch(() => {});
+                }, 30000);
               } catch (dlErr) {
                 console.warn('Auto download trigger notice:', dlErr);
               }

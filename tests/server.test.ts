@@ -11,8 +11,11 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as cheerio from 'cheerio';
 import type { SupportedPlatform, DownloadStatus, DownloadProgress, ExtractedImage } from '../shared/types';
+import { downloadManager } from '../server/dist/services/downloadManager.js';
 
 // ==============================================================================
 // 1. Platform Detection Logic
@@ -550,3 +553,71 @@ describe('FFmpeg Command Builder', () => {
     assert.ok(flacArgs.includes('-c:a') && flacArgs.includes('flac'));
   });
 });
+
+// ==============================================================================
+// 6. Storage Auto-Deletion & TTL Cleanup Evaluation
+// ==============================================================================
+
+describe('Storage Auto-Deletion & TTL Cleanup', () => {
+  it('should immediately purge all files for a taskId', () => {
+    const downloadsDir = downloadManager.getDownloadsDir();
+    const testTaskId = 'test-cleanup-id-999';
+    const file1 = path.join(downloadsDir, `${testTaskId}_video.mp4`);
+    const file2 = path.join(downloadsDir, `${testTaskId}_raw.webm`);
+
+    fs.writeFileSync(file1, 'dummy video content');
+    fs.writeFileSync(file2, 'dummy raw content');
+
+    assert.equal(fs.existsSync(file1), true);
+    assert.equal(fs.existsSync(file2), true);
+
+    downloadManager.deleteDownloadedFiles(testTaskId);
+
+    assert.equal(fs.existsSync(file1), false);
+    assert.equal(fs.existsSync(file2), false);
+  });
+
+  it('should auto-delete file on scheduled timer after user download', async () => {
+    const downloadsDir = downloadManager.getDownloadsDir();
+    const testTaskId = 'test-timer-id-888';
+    const file = path.join(downloadsDir, `${testTaskId}_song.mp3`);
+
+    fs.writeFileSync(file, 'dummy audio content');
+    assert.equal(fs.existsSync(file), true);
+
+    // Schedule cleanup with 50ms delay
+    downloadManager.scheduleFileCleanup(testTaskId, 50);
+
+    // Immediately still exists
+    assert.equal(fs.existsSync(file), true);
+
+    // Wait 100ms
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Must be deleted from server storage
+    assert.equal(fs.existsSync(file), false);
+  });
+
+  it('should sweep old files based on TTL threshold', () => {
+    const downloadsDir = downloadManager.getDownloadsDir();
+    const oldFile = path.join(downloadsDir, 'old_expired_file.mp4');
+    const newFile = path.join(downloadsDir, 'new_active_file.mp4');
+
+    fs.writeFileSync(oldFile, 'old data');
+    fs.writeFileSync(newFile, 'new data');
+
+    // Artificially change mtime of oldFile to 30 minutes ago
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    fs.utimesSync(oldFile, thirtyMinAgo, thirtyMinAgo);
+
+    // Sweep files older than 15 minutes
+    downloadManager.sweepOldFiles(15 * 60 * 1000);
+
+    assert.equal(fs.existsSync(oldFile), false);
+    assert.equal(fs.existsSync(newFile), true);
+
+    // Clean up test file
+    if (fs.existsSync(newFile)) fs.unlinkSync(newFile);
+  });
+});
+
