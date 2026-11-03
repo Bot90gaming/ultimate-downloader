@@ -88,6 +88,7 @@ export interface DownloadProgress {
 
 export interface DownloadRequest {
   url: string;
+  directUrl?: string;
   formatId?: string;
   extension?: string;
   mediaType?: MediaType;
@@ -110,6 +111,7 @@ export interface SystemHealth {
   uptime: number;
   hasFfmpeg: boolean;
   hasYtDlp: boolean;
-  downloadsDir: string;
+  downloadsDir?: string;
   diskFreeBytes?: number;
+  serverless?: boolean;
 }

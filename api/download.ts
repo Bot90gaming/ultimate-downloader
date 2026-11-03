@@ -30,9 +30,29 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const { url, extension, customFilename, title } = req.body || {};
+  const { url, directUrl, extension, customFilename, title } = req.body || {};
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'Valid "url" is required in request body.' });
+  }
+
+  // Resolve direct media URL for platforms like TikTok
+  let streamTargetUrl = directUrl || url;
+  if (!directUrl && url.includes('tiktok.com') && !url.includes('tiktokcdn')) {
+    try {
+      const tikRes = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (tikRes.ok) {
+        const tdata: any = await tikRes.json();
+        if (tdata.code === 0 && tdata.data) {
+          if (extension === 'mp3' && (tdata.data.music || tdata.data.music_info?.play)) {
+            streamTargetUrl = tdata.data.music || tdata.data.music_info?.play;
+          } else if (tdata.data.play) {
+            streamTargetUrl = tdata.data.play;
+          }
+        }
+      }
+    } catch {}
   }
 
   const taskId = `task_sv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -57,7 +77,7 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const downloadUrl = `/api/files/${taskId}?url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}`;
+  const downloadUrl = `/api/files/${taskId}?url=${encodeURIComponent(streamTargetUrl)}&name=${encodeURIComponent(fileName)}`;
 
   return res.status(200).json({
     taskId,

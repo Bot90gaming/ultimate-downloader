@@ -95,7 +95,15 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                       <img
                         src={item.thumbnail}
                         alt={item.title}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          if (!target.dataset.triedProxy && item.thumbnail && !item.thumbnail.startsWith('/api/')) {
+                            target.dataset.triedProxy = 'true';
+                            target.src = `/api/download-image?url=${encodeURIComponent(item.thumbnail)}&inline=true`;
+                          }
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

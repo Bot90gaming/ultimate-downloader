@@ -74,18 +74,19 @@ class SseProgressManager {
     });
   }
 
-  // Simulation fallback for offline/demo mode
+  // Simulation fallback for offline/demo/serverless mode
   public simulateTaskProgress(
     taskId: string,
     fileName: string,
-    totalBytes = 85000000
+    totalBytes = 85000000,
+    downloadUrl?: string
   ): void {
     if (this.activeSimulations.has(taskId)) return;
 
-    let progress = 0;
+    let progress = 8;
     const startTime = Date.now();
     const interval = window.setInterval(() => {
-      progress += Math.floor(Math.random() * 8) + 4; // increment 4-12%
+      progress += Math.floor(Math.random() * 8) + 6; // increment 6-14%
       if (progress >= 100) {
         progress = 100;
         window.clearInterval(interval);
@@ -100,7 +101,7 @@ class SseProgressManager {
           speedBytesPerSecond: 0,
           etaSeconds: 0,
           fileName,
-          downloadUrl: `/api/files/${taskId}?name=${encodeURIComponent(fileName)}`,
+          downloadUrl: downloadUrl || `/api/files/${taskId}?name=${encodeURIComponent(fileName)}`,
           timestamp: Date.now(),
         });
         return;
@@ -114,18 +115,23 @@ class SseProgressManager {
 
       this.notify({
         taskId,
-        status: progress < 5 ? 'fetching_info' : progress > 90 ? 'processing' : 'downloading',
+        status: progress < 10 ? 'fetching_info' : progress > 85 ? 'processing' : 'downloading',
         progressPercentage: progress,
         downloadedBytes: downloaded,
         totalBytes,
         speedBytesPerSecond: speed,
         etaSeconds: eta,
         fileName,
+        downloadUrl,
         timestamp: Date.now(),
       });
-    }, 450);
+    }, 350);
 
     this.activeSimulations.set(taskId, interval);
+  }
+
+  public isSimulating(taskId: string): boolean {
+    return this.activeSimulations.has(taskId);
   }
 
   public cancelSimulation(taskId: string): void {

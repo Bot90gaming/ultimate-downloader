@@ -11,6 +11,7 @@ export default async function handler(req: any, res: any) {
 
   const imageUrl = req.query.url as string;
   const filename = (req.query.filename as string) || 'image.jpg';
+  const isInline = req.query.inline === 'true' || req.query.preview === 'true';
 
   if (!imageUrl) {
     return res.status(400).json({ error: 'Missing "url" query parameter' });
@@ -19,7 +20,12 @@ export default async function handler(req: any, res: any) {
   try {
     let referer = 'https://google.com';
     try {
-      referer = new URL(imageUrl).origin;
+      const parsed = new URL(imageUrl);
+      if (parsed.hostname.includes('tiktok') || parsed.hostname.includes('byteoversea') || parsed.hostname.includes('ibyteimg')) {
+        referer = 'https://www.tiktok.com/';
+      } else {
+        referer = parsed.origin;
+      }
     } catch {}
 
     const upstream = await fetch(imageUrl, {
@@ -38,7 +44,13 @@ export default async function handler(req: any, res: any) {
 
     const contentType = upstream.headers.get('content-type') || 'image/jpeg';
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    
+    if (isInline) {
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    } else {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    }
 
     if (upstream.body) {
       const nodeStream = (Readable as any).fromWeb(upstream.body);

@@ -69,8 +69,13 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
     metadata.formats.find((f) => f.formatId === selectedFormatId) || metadata.formats[0];
 
   const handleDownload = () => {
+    const directUrl = audioOnly
+      ? (activeFormat?.directUrl || metadata.formats.find((f) => !f.hasVideo)?.directUrl)
+      : (activeFormat?.directUrl || metadata.sourceUrl);
+
     const req: DownloadRequest = {
       url: metadata.url,
+      directUrl: directUrl && directUrl !== metadata.url ? directUrl : undefined,
       formatId: activeFormat?.formatId,
       extension: audioOnly ? 'mp3' : activeFormat?.extension || 'mp4',
       mediaType: audioOnly ? 'audio' : 'video',
@@ -139,9 +144,15 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
                   : '')
               }
               alt={metadata.title}
+              referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
+                if (!target.dataset.triedProxy && metadata.thumbnail && !metadata.thumbnail.startsWith('/api/')) {
+                  target.dataset.triedProxy = 'true';
+                  target.src = `/api/download-image?url=${encodeURIComponent(metadata.thumbnail)}&inline=true`;
+                  return;
+                }
                 if (
                   metadata.platform === 'youtube' &&
                   metadata.id &&
@@ -176,7 +187,11 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
                 <img
                   src={metadata.author.avatar}
                   alt={metadata.author.name}
+                  referrerPolicy="no-referrer"
                   className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-surface-600"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-surface-700 flex items-center justify-center text-slate-600 dark:text-slate-300">

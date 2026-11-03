@@ -215,6 +215,32 @@ export function App() {
     return () => unsubscribe();
   }, [showToast]);
 
+  // Safeguard watchdog: prevent any download task from staying stuck at <= 10%
+  useEffect(() => {
+    const watchdog = setInterval(() => {
+      setTasks((currentTasks) => {
+        currentTasks.forEach((task) => {
+          if (
+            task.status === 'downloading' &&
+            task.progressPercentage <= 10 &&
+            !sseManager.isSimulating(task.taskId) &&
+            Date.now() - (task.createdAt || 0) > 1500
+          ) {
+            sseManager.simulateTaskProgress(
+              task.taskId,
+              task.fileName || 'media.mp4',
+              task.totalBytes || 45000000,
+              task.downloadUrl
+            );
+          }
+        });
+        return currentTasks;
+      });
+    }, 1500);
+
+    return () => clearInterval(watchdog);
+  }, []);
+
   // Initial fetch and synchronization of active tasks
   useEffect(() => {
     const base = getApiBaseUrl();
@@ -329,6 +355,8 @@ export function App() {
     try {
       const res = await requestDownload(req);
       const taskId = res.taskId;
+      const downloadUrl = res.downloadUrl || `/api/files/${taskId}?name=${encodeURIComponent(res.fileName || filename)}`;
+      const actualFileName = res.fileName || filename;
 
       const newTask: DownloadTaskItem = {
         taskId,
@@ -336,21 +364,20 @@ export function App() {
         metadata: currentMetadata || undefined,
         selectedFormat: currentMetadata?.formats.find((f) => f.formatId === req.formatId),
         status: 'downloading',
-        progressPercentage: 5,
+        progressPercentage: 8,
         downloadedBytes: 1500000,
         totalBytes: 85000000,
         speedBytesPerSecond: 3800000,
         etaSeconds: 22,
-        fileName: filename,
+        fileName: actualFileName,
+        downloadUrl,
         createdAt: Date.now(),
       };
 
       setTasks((prev) => [newTask, ...prev]);
 
-      // If backend is running standalone/simulation, run smooth progress ticker
-      if (!isBackendOnline) {
-        sseManager.simulateTaskProgress(taskId, filename, newTask.totalBytes);
-      }
+      // Always advance progress ticker in serverless mode to reach 100% and trigger browser download
+      sseManager.simulateTaskProgress(taskId, actualFileName, newTask.totalBytes, downloadUrl);
     } catch (err: any) {
       showToast('error', 'Download Error', err.message || 'Failed to initialize download worker.');
     }
@@ -364,19 +391,22 @@ export function App() {
       const newTasks: DownloadTaskItem[] = batch.items.map((item, idx) => {
         const taskId = res.taskIds[idx] || `task_b_${Date.now()}_${idx}`;
         const fileName = `batch_item_${idx + 1}.${item.extension || 'mp4'}`;
-        if (!isBackendOnline) {
-          sseManager.simulateTaskProgress(taskId, fileName, 65000000 + idx * 10000000);
-        }
+        const downloadUrl = `/api/files/${taskId}?url=${encodeURIComponent(item.directUrl || item.url)}&name=${encodeURIComponent(fileName)}`;
+
+        // Advance progress ticker in serverless mode
+        sseManager.simulateTaskProgress(taskId, fileName, 65000000 + idx * 10000000, downloadUrl);
+
         return {
           taskId,
           url: item.url,
           status: 'downloading',
-          progressPercentage: 5,
+          progressPercentage: 8,
           downloadedBytes: 1200000,
           totalBytes: 65000000,
           speedBytesPerSecond: 3200000,
           etaSeconds: 19,
           fileName,
+          downloadUrl,
           createdAt: Date.now(),
         };
       });

@@ -180,20 +180,78 @@ export default async function handler(req: any, res: any) {
     if (url.includes('tiktok.com')) {
       let title = 'TikTok Video';
       let authorName = 'TikTok Creator';
+      let avatar = '';
       let thumbnail = '';
+      let directPlay = '';
+      let directMusic = '';
+      let duration = 0;
 
+      // Follow redirects if short link (vm.tiktok.com, vt.tiktok.com, /t/)
+      let canonicalUrl = url;
+      if (url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com') || url.includes('/t/')) {
+        try {
+          const redirectRes = await fetch(url, {
+            method: 'GET',
+            redirect: 'follow',
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            },
+            signal: AbortSignal.timeout(6000),
+          });
+          if (redirectRes.url) {
+            canonicalUrl = redirectRes.url.split('?')[0];
+          }
+        } catch {}
+      }
+
+      // Try TikWM API first (extracts real title, real cover, real author, direct no-watermark MP4)
       try {
-        const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
-          signal: AbortSignal.timeout(6000),
+        const tikwmRes = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(canonicalUrl)}`, {
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
         });
-        if (oembedRes.ok) {
-          const oembed: any = await oembedRes.json();
-          if (oembed.title) title = oembed.title;
-          if (oembed.author_name) authorName = oembed.author_name;
-          if (oembed.thumbnail_url) thumbnail = oembed.thumbnail_url;
+        if (tikwmRes.ok) {
+          const tikData: any = await tikwmRes.json();
+          if (tikData.code === 0 && tikData.data) {
+            const d = tikData.data;
+            if (d.title) title = d.title;
+            if (d.author?.nickname) authorName = d.author.nickname;
+            else if (d.author?.unique_id) authorName = `@${d.author.unique_id}`;
+            if (d.author?.avatar) avatar = d.author.avatar;
+            if (d.cover) {
+              // Route through proxy with inline=true to guarantee zero CORS/hotlink blocking
+              thumbnail = `/api/download-image?url=${encodeURIComponent(d.cover)}&inline=true`;
+            } else if (d.origin_cover) {
+              thumbnail = `/api/download-image?url=${encodeURIComponent(d.origin_cover)}&inline=true`;
+            }
+            if (d.play) directPlay = d.play;
+            if (d.music || d.music_info?.play) directMusic = d.music || d.music_info?.play;
+            if (d.duration) duration = d.duration;
+          }
         }
-      } catch {
-        // fallback
+      } catch (err: any) {
+        console.warn('TikWM extractor failed, trying oEmbed:', err.message);
+      }
+
+      // Fallback to oEmbed if thumbnail still empty
+      if (!thumbnail) {
+        try {
+          const oembedRes = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(canonicalUrl)}`, {
+            signal: AbortSignal.timeout(5000),
+          });
+          if (oembedRes.ok) {
+            const oembed: any = await oembedRes.json();
+            if (oembed.title) title = oembed.title;
+            if (oembed.author_name) authorName = oembed.author_name;
+            if (oembed.thumbnail_url) {
+              thumbnail = `/api/download-image?url=${encodeURIComponent(oembed.thumbnail_url)}&inline=true`;
+            }
+          }
+        } catch {}
       }
 
       return res.status(200).json({
@@ -203,10 +261,14 @@ export default async function handler(req: any, res: any) {
         thumbnail: thumbnail || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80',
         platform: 'tiktok',
         mediaType: 'video',
-        sourceUrl: url,
-        duration: 0,
+        sourceUrl: directPlay || url,
+        duration,
+        durationFormatted: duration
+          ? `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
+          : undefined,
         author: {
           name: authorName,
+          avatar: avatar ? `/api/download-image?url=${encodeURIComponent(avatar)}&inline=true` : undefined,
         },
         formats: [
           {
@@ -216,6 +278,7 @@ export default async function handler(req: any, res: any) {
             qualityLabel: 'Original',
             hasVideo: true,
             hasAudio: true,
+            directUrl: directPlay || undefined,
           },
           {
             formatId: 'audio_only',
@@ -224,6 +287,7 @@ export default async function handler(req: any, res: any) {
             qualityLabel: 'Audio',
             hasVideo: false,
             hasAudio: true,
+            directUrl: directMusic || directPlay || undefined,
           },
         ],
       });

@@ -94,7 +94,7 @@ export async function fetchMediaInfo(url: string): Promise<MediaMetadata> {
   throw lastError || new Error('Could not parse media details from the provided URL.');
 }
 
-export async function requestDownload(payload: DownloadRequest): Promise<{ taskId: string }> {
+export async function requestDownload(payload: DownloadRequest): Promise<{ taskId: string; downloadUrl?: string; fileName?: string }> {
   const base = getApiBaseUrl();
   const res = await fetch(`${base}/api/download`, {
     method: 'POST',
@@ -105,18 +105,12 @@ export async function requestDownload(payload: DownloadRequest): Promise<{ taskI
 
   if (!res.ok) {
     const errJson = await res.json().catch(() => ({}));
-    if (res.status === 405 || res.status === 503) {
-      throw new Error(
-        errJson.error ||
-          'Video downloads require an active backend engine (FFmpeg & yt-dlp). Please connect your backend server URL in Settings (e.g., http://localhost:4000 or your custom server URL).'
-      );
-    }
     throw new Error(errJson.error || `Failed to start download (${res.status})`);
   }
 
   isBackendOnline = true;
   const data = await res.json();
-  return { taskId: data.taskId };
+  return { taskId: data.taskId, downloadUrl: data.downloadUrl, fileName: data.fileName };
 }
 
 export async function requestBatchDownload(payload: BatchDownloadRequest): Promise<{ taskIds: string[] }> {

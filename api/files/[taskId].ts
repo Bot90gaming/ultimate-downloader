@@ -80,11 +80,22 @@ export default async function handler(req: any, res: any) {
   // 2. Direct Serverless Streaming Handler
   if (targetUrl && typeof targetUrl === 'string') {
     try {
+      let referer = 'https://google.com';
+      try {
+        const parsed = new URL(targetUrl);
+        if (parsed.hostname.includes('tiktok') || parsed.hostname.includes('byteoversea')) {
+          referer = 'https://www.tiktok.com/';
+        } else {
+          referer = parsed.origin;
+        }
+      } catch {}
+
       const upstreamRes = await fetch(targetUrl, {
         method: 'GET',
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          Referer: referer,
           ...(req.headers.range ? { range: req.headers.range } : {}),
         },
       });
