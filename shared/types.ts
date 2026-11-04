@@ -98,6 +98,9 @@ export interface DownloadRequest {
   customFilename?: string;
   extractImagesAsZip?: boolean;
   selectedImageUrls?: string[];
+  reencodeH264?: boolean;
+  videoCodec?: string; // e.g. "h264"
+  audioCodec?: string; // e.g. "aac"
 }
 
 export interface BatchDownloadRequest {

@@ -314,19 +314,14 @@ export class DownloadManager {
       if (!isAudioOnly) {
         const vCodec = probe?.video?.codec?.toLowerCase() || '';
         const aCodec = probe?.audio?.codec?.toLowerCase() || '';
-        const vHeight = probe?.video?.height || 0;
         const isUniversalVideo = vCodec.includes('h264') || vCodec.includes('avc');
-        const isUniversalAudio = aCodec.includes('aac') || aCodec.includes('mp3');
+        const isUniversalAudio = aCodec.includes('aac');
 
-        if (!isUniversalAudio) {
+        // Universal output: Ensure H.264 video codec and AAC audio codec
+        if (!isUniversalVideo || !isUniversalAudio || req.reencodeH264) {
           needsUniversalTranscode = true;
-          // If video is already H.264 or high-res (>1080p), stream copy video so only audio is transcoded!
-          if (isUniversalVideo || vHeight > 1080 || vCodec.includes('vp9')) {
-            copyVideo = true;
-          }
-        } else if (!isUniversalVideo && vHeight <= 1080) {
-          needsUniversalTranscode = true;
-          copyVideo = false;
+          // Only copy video if video is already H.264/AVC and re-encode is not forced
+          copyVideo = isUniversalVideo && !req.reencodeH264;
         }
       }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   ActiveTab,
@@ -56,6 +56,11 @@ export function App() {
   const [inputUrl, setInputUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentMetadata, setCurrentMetadata] = useState<MediaMetadata | null>(null);
+  const currentMetadataRef = useRef<MediaMetadata | null>(null);
+
+  useEffect(() => {
+    currentMetadataRef.current = currentMetadata;
+  }, [currentMetadata]);
 
   // Active Downloads Queue
   const [tasks, setTasks] = useState<DownloadTaskItem[]>([]);
@@ -313,56 +318,152 @@ export function App() {
     }
   };
 
+  /**
+   * Tests if the input URL or target URL is a new link differing from the currently
+   * active metadata. If a new link is detected:
+   * 1. Invalidates any stale metadata from the previous media download
+   * 2. Refetches the media info for the new link
+   * 3. Sets currentMetadata and updates inputUrl
+   * 4. Guarantees universal H.264 video and AAC audio re-encoding parameters
+   */
+  const checkAndRefetchNewLink = async (targetUrl?: string): Promise<MediaMetadata | null> => {
+    const rawTarget = (targetUrl || inputUrl || '').trim();
+    if (!rawTarget) return null;
+
+    const currentUrl = currentMetadataRef.current?.url?.trim()?.toLowerCase();
+    const isNewLink = !currentMetadataRef.current || currentUrl !== rawTarget.toLowerCase();
+
+    if (isNewLink) {
+      console.log(`[checkAndRefetchNewLink] Detected new media link "${rawTarget}". Invaliding stale media and refetching fresh metadata...`);
+      setCurrentMetadata(null);
+      setIsLoading(true);
+
+      try {
+        const freshData = await fetchMediaInfo(rawTarget);
+        setCurrentMetadata(freshData);
+        if (inputUrl.trim() !== rawTarget) {
+          setInputUrl(rawTarget);
+        }
+        showToast(
+          'success',
+          'New Media Loaded',
+          `Parsed "${freshData.title}". Configured with universal H.264 / AAC re-encoding.`
+        );
+        return freshData;
+      } catch (err: any) {
+        showToast(
+          'error',
+          'Extraction Failed',
+          err.message || 'Could not parse media details for the new link.'
+        );
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    return currentMetadataRef.current;
+  };
+
+  // Test if user typed or pasted a new link, invalidate stale preview, and auto-refetch
+  useEffect(() => {
+    const clean = inputUrl.trim();
+    if (!clean || !/^https?:\/\/.+/i.test(clean)) return;
+
+    const currentLoadedUrl = currentMetadataRef.current?.url?.trim()?.toLowerCase();
+    if (currentLoadedUrl && currentLoadedUrl === clean.toLowerCase()) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      checkAndRefetchNewLink(clean);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [inputUrl]);
+
   // Analyze media URL
   const handleAnalyze = async (url: string) => {
     if (!url.trim()) return;
-    setIsLoading(true);
-    setCurrentMetadata(null);
+    setInputUrl(url.trim());
+    const data = await checkAndRefetchNewLink(url.trim());
 
-    try {
-      const data = await fetchMediaInfo(url.trim());
-      setCurrentMetadata(data);
-      showToast('success', 'Metadata Loaded', `Found "${data.title}" from ${data.platform}`);
-
-      // Auto download if preference is turned on
-      if (settings.autoDownload) {
-        const preferredFmt =
-          data.formats.find((f) => f.formatId === settings.defaultFormat) || data.formats[0];
-        handleStartDownload({
-          url: data.url,
-          formatId: preferredFmt?.formatId,
-          extension: preferredFmt?.extension || 'mp4',
-          audioOnly: settings.defaultFormat === 'audio_only',
-        });
-      }
-    } catch (err: any) {
-      showToast('error', 'Analysis Failed', err.message || 'Could not parse media details from the provided URL.');
-    } finally {
-      setIsLoading(false);
+    // Auto download if preference is turned on
+    if (data && settings.autoDownload) {
+      const preferredFmt =
+        data.formats.find((f) => f.formatId === settings.defaultFormat) || data.formats[0];
+      handleStartDownload({
+        url: data.url,
+        formatId: preferredFmt?.formatId,
+        extension: preferredFmt?.extension || 'mp4',
+        audioOnly: settings.defaultFormat === 'audio_only',
+        reencodeH264: true,
+        videoCodec: 'h264',
+        audioCodec: 'aac',
+      });
     }
   };
 
   // Start a single download
   const handleStartDownload = async (req: DownloadRequest) => {
-    const filename =
-      req.customFilename ||
-      (currentMetadata?.title
-        ? `${currentMetadata.title.slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '_')}.${req.extension || 'mp4'}`
-        : `download_${Date.now()}.${req.extension || 'mp4'}`);
+    let activeReq: DownloadRequest = {
+      ...req,
+      reencodeH264: true,
+      videoCodec: 'h264',
+      audioCodec: 'aac',
+    };
 
-    showToast('info', 'Download Queued', `Starting stream download for ${filename}...`);
+    // Critical check: If user typed/pasted a new link in the input field that differs from the
+    // currently active preview/request URL, test and refetch the new link before downloading so
+    // we NEVER download the previous media!
+    const cleanInput = inputUrl.trim();
+    if (
+      cleanInput &&
+      /^https?:\/\/.+/i.test(cleanInput) &&
+      (!activeReq.url || cleanInput.toLowerCase() !== activeReq.url.trim().toLowerCase())
+    ) {
+      console.log(`[handleStartDownload] New link detected in input ("${cleanInput}") differing from active media ("${activeReq.url}"). Refetching first...`);
+      showToast('info', 'New Link Detected', 'Refetching new link with H.264/AAC re-encoding before downloading...');
+      const freshMeta = await checkAndRefetchNewLink(cleanInput);
+      if (freshMeta) {
+        const preferredFmt =
+          freshMeta.formats.find((f) => (activeReq.audioOnly ? (!f.hasVideo && f.hasAudio) : f.hasVideo)) ||
+          freshMeta.formats[0];
+
+        activeReq = {
+          ...activeReq,
+          url: freshMeta.url,
+          directUrl: preferredFmt?.directUrl || freshMeta.sourceUrl,
+          formatId: preferredFmt?.formatId,
+          extension: activeReq.audioOnly ? 'mp3' : preferredFmt?.extension || 'mp4',
+          reencodeH264: true,
+          videoCodec: 'h264',
+          audioCodec: 'aac',
+        };
+      } else {
+        return; // Halt if fetching the new link failed
+      }
+    }
+
+    const filename =
+      activeReq.customFilename ||
+      (currentMetadata?.title
+        ? `${currentMetadata.title.slice(0, 40).replace(/[^a-zA-Z0-9_-]/g, '_')}.${activeReq.extension || 'mp4'}`
+        : `download_${Date.now()}.${activeReq.extension || 'mp4'}`);
+
+    showToast('info', 'Download Queued', `Starting H.264/AAC download for ${filename}...`);
 
     try {
-      const res = await requestDownload(req);
+      const res = await requestDownload(activeReq);
       const taskId = res.taskId;
-      const downloadUrl = res.downloadUrl || `/api/files/${taskId}?name=${encodeURIComponent(res.fileName || filename)}`;
+      const downloadUrl = res.downloadUrl || `/api/files/${taskId}?name=${encodeURIComponent(res.fileName || filename)}&vcodec=h264&acodec=aac`;
       const actualFileName = res.fileName || filename;
 
       const newTask: DownloadTaskItem = {
         taskId,
-        url: req.url,
+        url: activeReq.url,
         metadata: currentMetadata || undefined,
-        selectedFormat: currentMetadata?.formats.find((f) => f.formatId === req.formatId),
+        selectedFormat: currentMetadata?.formats.find((f) => f.formatId === activeReq.formatId),
         status: 'downloading',
         progressPercentage: 8,
         downloadedBytes: 1500000,
@@ -462,7 +563,7 @@ export function App() {
 
   const handleRedownload = (url: string) => {
     setInputUrl(url);
-    handleAnalyze(url);
+    checkAndRefetchNewLink(url);
   };
 
   // Save Settings
@@ -514,7 +615,7 @@ export function App() {
             <HeroSection
               onSelectPlatformSample={(url) => {
                 setInputUrl(url);
-                handleAnalyze(url);
+                checkAndRefetchNewLink(url);
               }}
             />
 
@@ -522,7 +623,14 @@ export function App() {
             <MediaInputCard
               inputUrl={inputUrl}
               setInputUrl={setInputUrl}
-              onAnalyze={handleAnalyze}
+              onAnalyze={(url) => {
+                setInputUrl(url);
+                checkAndRefetchNewLink(url);
+              }}
+              onClear={() => {
+                setInputUrl('');
+                setCurrentMetadata(null);
+              }}
               isLoading={isLoading}
             />
 

@@ -77,13 +77,15 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const downloadUrl = `/api/files/${taskId}?url=${encodeURIComponent(streamTargetUrl)}&name=${encodeURIComponent(fileName)}`;
+  const downloadUrl = `/api/files/${taskId}?url=${encodeURIComponent(streamTargetUrl)}&name=${encodeURIComponent(fileName)}&vcodec=h264&acodec=aac`;
 
   return res.status(200).json({
     taskId,
     status: 'downloading',
     downloadUrl,
     fileName,
-    message: 'Serverless streaming task initialized.',
+    videoCodec: 'h264',
+    audioCodec: 'aac',
+    message: 'Serverless H.264/AAC streaming task initialized.',
   });
 }

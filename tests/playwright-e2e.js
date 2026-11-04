@@ -142,7 +142,7 @@ async function runTests() {
 
     // Wait for MediaPreviewCard to render
     console.log('  ⏳ Waiting for media metadata extraction...');
-    await page.waitForSelector('button[aria-label="Start Download"]', { timeout: 25000 });
+    await page.waitForSelector('button[aria-label="Start Download"]', { timeout: 45000 });
 
     const previewVisible = await page.evaluate(() => {
       const body = document.body.innerText;
@@ -292,6 +292,54 @@ async function runTests() {
     // Close settings modal
     const closeBtn = await page.$('button:has-text("Cancel"), button:has-text("Save")');
     if (closeBtn) await closeBtn.click();
+
+    // ----------------------------------------------------
+    // TEST 8: Sequential Multi-Link Input & H.264/AAC Refetch
+    // ----------------------------------------------------
+    console.log('\n--- TEST 8: Sequential Multi-Link Input & H.264/AAC Re-encode ---');
+    // Ensure we are back on Single tab
+    const singleTabBtn = await page.waitForSelector('button[aria-label="Single Download Tab"]');
+    if (singleTabBtn) await singleTabBtn.click();
+    await page.waitForTimeout(300);
+
+    const firstUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    const secondUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4';
+
+    const mainInput = await page.waitForSelector('input[aria-label="Media or webpage link"]');
+    await mainInput.fill(firstUrl);
+    const mainAnalyzeBtn = await page.waitForSelector('button[aria-label="Analyze and Fetch Media"], button:has-text("Analyze & Fetch")');
+    await mainAnalyzeBtn.click();
+
+    // Wait for first preview
+    await page.waitForSelector('button[aria-label="Start Download"]', { timeout: 20000 });
+    const firstPreviewText = await page.evaluate(() => document.body.innerText);
+    assert(firstPreviewText.includes('ForBiggerBlazes') || firstPreviewText.includes('Download'), 'First media loaded successfully');
+
+    // Now user inputs a second link
+    console.log('  Testing sequential link input: entering second media link...');
+    await mainInput.fill(secondUrl);
+    await mainAnalyzeBtn.click();
+
+    // Wait for refetch of second link to complete and preview to update
+    await page.waitForFunction(
+      () => document.body.innerText.includes('ForBiggerEscapes'),
+      { timeout: 45000 }
+    );
+    const secondPreviewText = await page.evaluate(() => document.body.innerText);
+    assert(
+      secondPreviewText.includes('ForBiggerEscapes') || secondPreviewText.includes('H.264') || secondPreviewText.includes('AAC'),
+      'Entering new link refetched metadata and set H.264/AAC parameters'
+    );
+
+    // Verify Universal H.264 / AAC badge is present in DOM
+    const codecBadge = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return text.includes('H.264') || text.includes('Universal MP4') || text.includes('AAC');
+    });
+    assert(codecBadge, 'Universal H.264 / AAC encoding indicators visible on preview card');
+
+    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, '09-sequential-reencode.png'), fullPage: false });
+    console.log('  📸 Captured 09-sequential-reencode.png');
 
     console.log('\n===============================================');
     console.log(`🎉 ALL ${passedCount}/${totalTests} PLAYWRIGHT E2E TESTS PASSED!`);

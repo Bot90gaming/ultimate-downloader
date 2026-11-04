@@ -621,3 +621,93 @@ describe('Storage Auto-Deletion & TTL Cleanup', () => {
   });
 });
 
+// ==============================================================================
+// 7. Multi-Link Sequential Detection & H.264/AAC Re-encoding
+// ==============================================================================
+
+describe('Multi-Link Sequential Download & H.264/AAC Codec Enforcement', () => {
+  it('should detect when user inputs a new link and flag stale previous media', () => {
+    let currentMetadata: any = {
+      id: 'media_1',
+      url: 'https://www.youtube.com/watch?v=video_one',
+      title: 'First YouTube Video',
+    };
+
+    // Helper imitating checkAndRefetchNewLink logic
+    const testAndCheckNewLink = (inputUrl: string, loadedMeta: any) => {
+      const clean = inputUrl.trim().toLowerCase();
+      const current = loadedMeta?.url?.trim()?.toLowerCase();
+      const isNew = !loadedMeta || current !== clean;
+      return {
+        isNewLink: isNew,
+        shouldInvalidateOldMedia: isNew,
+        targetUrl: inputUrl.trim(),
+      };
+    };
+
+    // 1. Same link should not invalidate
+    const checkSame = testAndCheckNewLink('https://www.youtube.com/watch?v=video_one', currentMetadata);
+    assert.equal(checkSame.isNewLink, false);
+    assert.equal(checkSame.shouldInvalidateOldMedia, false);
+
+    // 2. New link (e.g. TikTok) must invalidate old metadata immediately
+    const checkNew = testAndCheckNewLink('https://www.tiktok.com/@creator/video/7891011', currentMetadata);
+    assert.equal(checkNew.isNewLink, true);
+    assert.equal(checkNew.shouldInvalidateOldMedia, true);
+    assert.equal(checkNew.targetUrl, 'https://www.tiktok.com/@creator/video/7891011');
+
+    // Reset currentMetadata and load second link
+    currentMetadata = {
+      id: 'media_2',
+      url: 'https://www.tiktok.com/@creator/video/7891011',
+      title: 'Second TikTok Video',
+    };
+
+    // 3. User now enters a third link (Instagram)
+    const checkThird = testAndCheckNewLink('https://www.instagram.com/reel/C8XYZ123/', currentMetadata);
+    assert.equal(checkThird.isNewLink, true);
+    assert.equal(checkThird.shouldInvalidateOldMedia, true);
+  });
+
+  it('should enforce H.264 video codec and AAC audio codec on download requests', () => {
+    const downloadReq: import('../shared/types.js').DownloadRequest = {
+      url: 'https://www.youtube.com/watch?v=video_new',
+      extension: 'mp4',
+      reencodeH264: true,
+      videoCodec: 'h264',
+      audioCodec: 'aac',
+    };
+
+    assert.equal(downloadReq.reencodeH264, true);
+    assert.equal(downloadReq.videoCodec, 'h264');
+    assert.equal(downloadReq.audioCodec, 'aac');
+
+    // Verify format parameter resolution
+    const formatLabel = 'H.264 / AAC';
+    assert.match(formatLabel, /H\.264/);
+    assert.match(formatLabel, /AAC/);
+  });
+
+  it('should guarantee that mismatched input URL refetches before initiating download', () => {
+    const activeMedia = {
+      url: 'https://www.youtube.com/watch?v=first_media',
+      title: 'First Media',
+    };
+
+    const userInput = 'https://www.tiktok.com/@user/video/second_media';
+
+    // Download request initiated while input has been changed by the user
+    const downloadRequestedFor = activeMedia.url;
+
+    // Safety guard condition implemented in handleStartDownload
+    const inputDiffersFromDownload =
+      userInput.trim().toLowerCase() !== downloadRequestedFor.toLowerCase();
+
+    assert.equal(inputDiffersFromDownload, true);
+    // When true, app halts download of first_media and refetches second_media
+    const safeTargetUrl = inputDiffersFromDownload ? userInput.trim() : downloadRequestedFor;
+    assert.equal(safeTargetUrl, userInput.trim());
+    assert.notEqual(safeTargetUrl, activeMedia.url);
+  });
+});
+

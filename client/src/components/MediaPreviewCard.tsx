@@ -83,6 +83,9 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
       trimStart: enableTrim ? trimStart : undefined,
       trimEnd: enableTrim ? trimEnd : undefined,
       customFilename: customFilename.trim() || undefined,
+      reencodeH264: true,
+      videoCodec: 'h264',
+      audioCodec: 'aac',
     };
     onStartDownload(req);
   };
@@ -434,6 +437,33 @@ export const MediaPreviewCard: React.FC<MediaPreviewCardProps> = ({
             <span>
               Download {audioOnly ? 'Lossless Audio (MP3)' : activeFormat?.resolution || 'Video'}
             </span>
+          </button>
+
+          {/* Universal H.264 / AAC Encoding Badge */}
+          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1 pt-1.5 border-t border-slate-100 dark:border-white/5">
+            <span className="flex items-center gap-1.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+              {audioOnly ? 'Audio Stream: AAC / MP3' : 'Video Codec: H.264 (AVC) + AAC Stereo'}
+            </span>
+            <span className="text-[10px] uppercase font-bold tracking-wider text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-500/10 px-2 py-0.5 rounded">
+              Universal MP4
+            </span>
+          </div>
+
+          {/* Download Another Link CTA */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onClose) onClose();
+              const inputEl = document.querySelector('input[aria-label="Media or webpage link"]') as HTMLInputElement;
+              if (inputEl) {
+                inputEl.value = '';
+                inputEl.focus();
+              }
+            }}
+            className="w-full text-center text-xs font-semibold text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 pt-1 hover:underline cursor-pointer transition-colors"
+          >
+            + Or paste another media link to download
           </button>
         </div>
       </div>

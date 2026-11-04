@@ -8,6 +8,7 @@ interface MediaInputCardProps {
   setInputUrl: (url: string) => void;
   onAnalyze: (url: string) => void;
   isLoading: boolean;
+  onClear?: () => void;
 }
 
 export const MediaInputCard: React.FC<MediaInputCardProps> = ({
@@ -15,6 +16,7 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
   setInputUrl,
   onAnalyze,
   isLoading,
+  onClear,
 }) => {
   const [platform, setPlatform] = useState(detectPlatform(inputUrl));
 
@@ -25,8 +27,11 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) {
-        setInputUrl(text.trim());
+      if (text && text.trim()) {
+        const clean = text.trim();
+        setInputUrl(clean);
+        // Immediately refetch the newly pasted link
+        onAnalyze(clean);
       }
     } catch {
       // In case clipboard permission is denied, focus input
@@ -41,6 +46,9 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
 
   const handleClear = () => {
     setInputUrl('');
+    if (onClear) {
+      onClear();
+    }
   };
 
   const platformInfo = PLATFORMS_INFO[platform];
@@ -62,6 +70,14 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
               type="text"
               value={inputUrl}
               onChange={(e) => setInputUrl(e.target.value)}
+              onPaste={(e) => {
+                const pastedText = e.clipboardData?.getData('text');
+                if (pastedText && pastedText.trim()) {
+                  const clean = pastedText.trim();
+                  setInputUrl(clean);
+                  onAnalyze(clean);
+                }
+              }}
               placeholder="Paste any link: YouTube, TikTok, Instagram, X/Twitter, Reddit, Pinterest..."
               aria-label="Media or webpage link"
               className="w-full bg-transparent text-slate-900 dark:text-white placeholder-slate-400 font-mono text-xs sm:text-sm md:text-base focus:outline-none pr-8 selection:bg-brand-500/20"
@@ -136,7 +152,10 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setInputUrl(PLATFORMS_INFO.youtube.sampleUrl)}
+            onClick={() => {
+              setInputUrl(PLATFORMS_INFO.youtube.sampleUrl);
+              onAnalyze(PLATFORMS_INFO.youtube.sampleUrl);
+            }}
             className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
             YouTube 4K
@@ -144,7 +163,10 @@ export const MediaInputCard: React.FC<MediaInputCardProps> = ({
           <span className="text-slate-300 dark:text-slate-700">•</span>
           <button
             type="button"
-            onClick={() => setInputUrl(PLATFORMS_INFO.tiktok.sampleUrl)}
+            onClick={() => {
+              setInputUrl(PLATFORMS_INFO.tiktok.sampleUrl);
+              onAnalyze(PLATFORMS_INFO.tiktok.sampleUrl);
+            }}
             className="hover:text-brand-600 dark:hover:text-brand-300 hover:underline cursor-pointer transition-colors font-medium"
           >
             TikTok HD
